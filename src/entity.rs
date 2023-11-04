@@ -7,16 +7,28 @@ pub struct Entity {
     next_position: Vec2f,
     goal: Option<Vec2f>,
     speed: f32,
+    id: usize,
 }
 
 impl Entity {
     pub fn new(position: Vec2f) -> Entity {
+        let random_id = rand::random::<usize>();
+
         Entity {
             position: position.clone(),
             next_position: position.clone(),
             goal: Some(Vec2f::new(10.0, 10.0)),
-            speed: 0.02,
+            speed: 0.05,
+            id: random_id,
         }
+    }
+
+    pub fn get_id(&self) -> usize {
+        self.id
+    }
+
+    pub fn set_goal(&mut self, goal: &Vec2f) {
+        self.goal = Some(goal.clone());
     }
 
     pub fn get_position(&self) -> Vec2f {

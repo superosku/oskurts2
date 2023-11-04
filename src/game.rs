@@ -119,6 +119,29 @@ impl Game {
         self.draw_ground(dt, camera);
         self.draw_entities(dt, camera);
     }
+
+    pub fn entity_ids_in_bounding_box(&self, top_left: Vec2f, bottom_right: Vec2f) -> Vec<usize> {
+        let mut entity_ids: Vec<usize> = Vec::new();
+        for entity in self.entities.iter() {
+            let entity_position = entity.get_position();
+            if entity_position.x >= top_left.x
+                && entity_position.x <= bottom_right.x
+                && entity_position.y >= top_left.y
+                && entity_position.y <= bottom_right.y
+            {
+                entity_ids.push(entity.get_id());
+            }
+        }
+        entity_ids
+    }
+
+    pub fn command_entities_move(&mut self, entity_ids: &Vec<usize>, goal_pos: &Vec2f) {
+        for entity in self.entities.iter_mut() {
+            if entity_ids.contains(&entity.get_id()) {
+                entity.set_goal(&goal_pos);
+            }
+        }
+    }
 }
 
 impl GameThing for Game {
