@@ -1,19 +1,19 @@
-use std::time::{Duration, Instant};
 use minifb::{Key, MouseMode, Window, WindowOptions};
 use rand::Rng;
 use raqote::{
     DrawOptions, DrawTarget, LineCap, LineJoin, PathBuilder, SolidSource, Source, StrokeStyle,
 };
 use rayon::prelude::*;
+use std::time::{Duration, Instant};
 
 use crate::game::Game;
 use crate::game_thing::GameThing;
 
 mod camera;
-mod game;
-mod vec;
 mod entity;
+mod game;
 mod game_thing;
+mod vec;
 
 fn main() {
     println!("Hello, world!");
@@ -51,10 +51,7 @@ fn main() {
             // std::thread::sleep(frame_duration - frame_time);
         }
         // Update window title with the FPS
-        window.set_title(&format!(
-            "Rts2 - FPS: {}",
-            1.0 / frame_time.as_secs_f32()
-        ));
+        window.set_title(&format!("Rts2 - FPS: {}", 1.0 / frame_time.as_secs_f32()));
 
         dt.clear(SolidSource::from_unpremultiplied_argb(
             0xff, 0x00, 0x00, 0x00,
