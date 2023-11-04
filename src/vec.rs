@@ -48,6 +48,14 @@ impl ops::Add for Vec2f {
     }
 }
 
+impl<'a, 'b> ops::Add<&'b Vec2f> for &'a Vec2f {
+    type Output = Vec2f;
+
+    fn add(self, other: &'b Vec2f) -> Vec2f {
+        Vec2f::new(self.x + other.x, self.y + other.y)
+    }
+}
+
 impl ops::Neg for Vec2f {
     type Output = Vec2f;
 

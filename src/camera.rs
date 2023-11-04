@@ -12,7 +12,7 @@ pub const SCREEN_HEIGHT: usize = 800;
 impl Camera {
     pub fn new() -> Camera {
         Camera {
-            position: vec::Vec2f::new(0.0, 0.0),
+            position: vec::Vec2f::new(10.0, 10.0),
             zoom: 20.0,
         }
     }
@@ -27,8 +27,10 @@ impl Camera {
 
     pub fn world_to_screen(&self, point: &vec::Vec2f) -> vec::Vec2f {
         vec::Vec2f::new(
-            point.x * self.zoom + (SCREEN_WIDTH / 2) as f32,
-            point.y * self.zoom + (SCREEN_HEIGHT / 2) as f32,
+            point.x * self.zoom + (SCREEN_WIDTH / 2) as f32
+                - self.length_to_pixels(self.position.x),
+            point.y * self.zoom + (SCREEN_HEIGHT / 2) as f32
+                - self.length_to_pixels(self.position.y),
         )
     }
 
@@ -40,7 +42,10 @@ impl Camera {
     }
 
     pub fn length_to_pixels(&self, length: f32) -> f32 {
-        // 100.0
         length * self.zoom
+    }
+
+    pub fn pixels_to_length(&self, pixels: f32) -> f32 {
+        pixels / self.zoom
     }
 }
