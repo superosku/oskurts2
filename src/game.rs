@@ -29,8 +29,9 @@ impl Game {
         }
     }
 
-    fn draw_entities(&self, dt: &mut DrawTarget, camera: &Camera) {
+    fn draw_entities(&self, dt: &mut DrawTarget, camera: &Camera, selected_entiy_ids: &Vec<usize>) {
         let mut path_builder = PathBuilder::new();
+        let mut selection_path_builder = PathBuilder::new();
 
         for entity in self.entities.iter() {
             // entity.draw(dt, camera);
@@ -51,6 +52,23 @@ impl Game {
                 0.0,
                 2.0 * std::f32::consts::PI,
             );
+
+            if selected_entiy_ids.contains(&entity.get_id()) {
+                let source =
+                    Source::Solid(SolidSource::from_unpremultiplied_argb(255, 255, 255, 255));
+
+                let top_right_corner = camera.world_to_screen(&Vec2f::new(
+                    entity_position.x - 0.5,
+                    entity_position.y - 0.5,
+                ));
+
+                selection_path_builder.rect(
+                    top_right_corner.x,
+                    top_right_corner.y,
+                    camera.length_to_pixels(1.0),
+                    camera.length_to_pixels(1.0),
+                );
+            }
         }
 
         let path = path_builder.finish();
@@ -58,6 +76,18 @@ impl Game {
         // let source_dark = Source::Solid(SolidSource::from_unpremultiplied_argb(255, 200, 200, 255));
 
         dt.fill(&path, &source, &DrawOptions::new());
+
+        let selection_path = selection_path_builder.finish();
+        let selection_source =
+            Source::Solid(SolidSource::from_unpremultiplied_argb(255, 0, 255, 0));
+
+        let stroke_style = &mut raqote::StrokeStyle::default();
+        dt.stroke(
+            &selection_path,
+            &selection_source,
+            stroke_style,
+            &DrawOptions::new(),
+        );
 
         // let stroke_style = &mut raqote::StrokeStyle::default();
         // stroke_style.width = camera.length_to_pixels(0.1);
@@ -115,9 +145,9 @@ impl Game {
         dt.fill(&wall_path, &wall_source, &DrawOptions::new());
     }
 
-    pub fn draw(&self, dt: &mut DrawTarget, camera: &Camera) {
+    pub fn draw(&self, dt: &mut DrawTarget, camera: &Camera, selected_entiy_ids: &Vec<usize>) {
         self.draw_ground(dt, camera);
-        self.draw_entities(dt, camera);
+        self.draw_entities(dt, camera, selected_entiy_ids);
     }
 
     pub fn entity_ids_in_bounding_box(&self, top_left: Vec2f, bottom_right: Vec2f) -> Vec<usize> {

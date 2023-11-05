@@ -48,6 +48,9 @@ fn main() {
 
     let mut selected_ids: Vec<usize> = Vec::new();
 
+    let mut right_button_pressed = false;
+    let mut right_button_down = false;
+
     while window.is_open() && !window.is_key_down(Key::Escape) {
         let now = Instant::now();
         let frame_time = now - last_frame_time;
@@ -95,14 +98,21 @@ fn main() {
         window.set_title(&format!("Rts2 - FPS: {}", average_fps));
 
         game.update();
-        game.draw(&mut dt, &camera);
+        game.draw(&mut dt, &camera, &selected_ids);
 
         let mouse_pos = window.get_mouse_pos(MouseMode::Clamp).unwrap();
         let mouse_pos_game = camera.screen_to_world(&Vec2f::new(mouse_pos.0, mouse_pos.1));
         let left_button_down = window.get_mouse_down(MouseButton::Left);
-        let right_button_down = window.get_mouse_down(MouseButton::Right);
 
-        if right_button_down {
+        let new_right_button_down = window.get_mouse_down(MouseButton::Right);
+        if new_right_button_down && !right_button_down {
+            right_button_pressed = true;
+        } else {
+            right_button_pressed = false;
+        }
+        right_button_down = new_right_button_down;
+
+        if right_button_pressed {
             println!("Commading a move");
             game.command_entities_move(&selected_ids, &mouse_pos_game);
         }
@@ -141,7 +151,7 @@ fn main() {
         } else {
             match &drag_start_pos {
                 Some(start_pos) => {
-                    let new_selected_ids = game.entity_ids_in_bounding_box(
+                    selected_ids = game.entity_ids_in_bounding_box(
                         Vec2f::new(
                             start_pos.x.min(mouse_pos_game.x),
                             start_pos.y.min(mouse_pos_game.y),
@@ -151,9 +161,6 @@ fn main() {
                             start_pos.y.max(mouse_pos_game.y),
                         ),
                     );
-                    selected_ids = new_selected_ids;
-                    println!("Selected ids: {:?}", selected_ids);
-                    // TODO: Do something with the drag when it ends
                     drag_start_pos = None;
                 }
                 None => {}

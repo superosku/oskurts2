@@ -16,8 +16,8 @@ pub struct Ground {
 
 impl Ground {
     pub fn new() -> Ground {
-        let width: i32 = 20;
-        let height: i32 = 20;
+        let width: i32 = 40;
+        let height: i32 = 30;
         let mut tiles: Vec<GroundType> = Vec::new();
         for _ in 0..width * height {
             // Random change of being a wall
