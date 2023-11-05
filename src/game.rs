@@ -49,7 +49,7 @@ impl Game {
             path_builder.arc(
                 draw_pos.x,
                 draw_pos.y,
-                camera.length_to_pixels(0.5),
+                camera.length_to_pixels(entity.get_radius()),
                 0.0,
                 2.0 * std::f32::consts::PI,
             );
@@ -63,15 +63,15 @@ impl Game {
                 }
 
                 let top_right_corner = camera.world_to_screen(&Vec2f::new(
-                    entity_position.x - 0.5,
-                    entity_position.y - 0.5,
+                    entity_position.x - entity.get_radius(),
+                    entity_position.y - entity.get_radius(),
                 ));
 
                 selection_path_builder.rect(
                     top_right_corner.x,
                     top_right_corner.y,
-                    camera.length_to_pixels(1.0),
-                    camera.length_to_pixels(1.0),
+                    camera.length_to_pixels(entity.get_radius() * 2.0),
+                    camera.length_to_pixels(entity.get_radius() * 2.0),
                 );
             }
         }
@@ -202,9 +202,10 @@ impl GameThing for Game {
                 }
                 let entity2 = &mut self.entities[i2];
                 let entity2_position = entity2.get_position();
+                let entity2_radius = entity2.get_radius();
 
                 let entity1 = &mut self.entities[i1];
-                entity1.get_pushed(entity2_position);
+                entity1.get_pushed(entity2_position, entity2_radius);
             }
         }
         for entity in self.entities.iter_mut() {

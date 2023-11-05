@@ -9,11 +9,14 @@ pub struct Entity {
     goal_group_size: i32,
     speed: f32,
     id: usize,
+    radius: f32,
 }
 
 impl Entity {
     pub fn new(position: Vec2f) -> Entity {
         let random_id = rand::random::<usize>();
+        // Radius should be random between 0.25 and 0.5
+        let random_radius = rand::random::<f32>() / 4.0 + 0.25;
 
         Entity {
             position: position.clone(),
@@ -23,7 +26,12 @@ impl Entity {
             speed: 0.05,
             id: random_id,
             goal_group_size: 1,
+            radius: random_radius,
         }
+    }
+
+    pub fn get_radius(&self) -> f32 {
+        self.radius
     }
 
     pub fn get_id(&self) -> usize {
@@ -43,7 +51,7 @@ impl Entity {
         self.goal.clone()
     }
 
-    pub fn get_pushed(&mut self, other_position: Vec2f) {
+    pub fn get_pushed(&mut self, other_position: Vec2f, other_radius: f32) {
         let delta = self.position.clone() - other_position;
         if delta.length() == 0.0 {
             println!("Delta length is 0.0");
@@ -53,10 +61,12 @@ impl Entity {
             return;
         }
 
+        let radius_sum = self.radius + other_radius;
+
         let delta_length = delta.length();
-        if delta_length < 1.0 {
+        if delta_length < radius_sum {
             let vector_away_from_other = delta.normalized();
-            let overlap_amount = 1.0 - delta_length;
+            let overlap_amount = radius_sum - delta_length;
             self.next_position += vector_away_from_other * overlap_amount / 2.0;
         }
     }
@@ -79,18 +89,20 @@ impl Entity {
             }
         }
 
+        let radius = self.radius;
+
         // Partially inside a block directly side by side
-        if ground.is_blocked(&(self.next_position.clone() + Vec2f::new(0.5, 0.0))) {
-            self.next_position.x = self.next_position.x.floor() + 0.5;
+        if ground.is_blocked(&(self.next_position.clone() + Vec2f::new(radius, 0.0))) {
+            self.next_position.x = self.next_position.x.floor() + (1.0 - radius);
         }
-        if ground.is_blocked(&(self.next_position.clone() + Vec2f::new(-0.5, 0.0))) {
-            self.next_position.x = self.next_position.x.ceil() - 0.5;
+        if ground.is_blocked(&(self.next_position.clone() + Vec2f::new(-radius, 0.0))) {
+            self.next_position.x = self.next_position.x.ceil() - (1.0 - radius);
         }
-        if ground.is_blocked(&(self.next_position.clone() + Vec2f::new(0.0, 0.5))) {
-            self.next_position.y = self.next_position.y.floor() + 0.5;
+        if ground.is_blocked(&(self.next_position.clone() + Vec2f::new(0.0, radius))) {
+            self.next_position.y = self.next_position.y.floor() + (1.0 - radius);
         }
-        if ground.is_blocked(&(self.next_position.clone() + Vec2f::new(0.0, -0.5))) {
-            self.next_position.y = self.next_position.y.ceil() - 0.5;
+        if ground.is_blocked(&(self.next_position.clone() + Vec2f::new(0.0, -radius))) {
+            self.next_position.y = self.next_position.y.ceil() - (1.0 - radius);
         }
 
         // Partially inside a block diagonally
@@ -122,9 +134,9 @@ impl Entity {
             let corner_pos = Vec2f::new(floor_x as f32, floor_y as f32);
             let delta = self.next_position.clone() - corner_pos;
             let delta_length = delta.length();
-            if delta_length < 0.5 {
+            if delta_length < radius {
                 let vector_away_from_other = delta.normalized();
-                let overlap_amount = 0.5 - delta_length;
+                let overlap_amount = radius - delta_length;
                 self.next_position += vector_away_from_other * overlap_amount;
             }
         }
@@ -132,9 +144,9 @@ impl Entity {
             let corner_pos = Vec2f::new(floor_x as f32, ceil_y as f32);
             let delta = self.next_position.clone() - corner_pos;
             let delta_length = delta.length();
-            if delta_length < 0.5 {
+            if delta_length < radius {
                 let vector_away_from_other = delta.normalized();
-                let overlap_amount = 0.5 - delta_length;
+                let overlap_amount = radius - delta_length;
                 self.next_position += vector_away_from_other * overlap_amount;
             }
         }
@@ -142,9 +154,9 @@ impl Entity {
             let corner_pos = Vec2f::new(ceil_x as f32, floor_y as f32);
             let delta = self.next_position.clone() - corner_pos;
             let delta_length = delta.length();
-            if delta_length < 0.5 {
+            if delta_length < radius {
                 let vector_away_from_other = delta.normalized();
-                let overlap_amount = 0.5 - delta_length;
+                let overlap_amount = radius - delta_length;
                 self.next_position += vector_away_from_other * overlap_amount;
             }
         }
@@ -152,9 +164,9 @@ impl Entity {
             let corner_pos = Vec2f::new(ceil_x as f32, ceil_y as f32);
             let delta = self.next_position.clone() - corner_pos;
             let delta_length = delta.length();
-            if delta_length < 0.5 {
+            if delta_length < radius {
                 let vector_away_from_other = delta.normalized();
-                let overlap_amount = 0.5 - delta_length;
+                let overlap_amount = radius - delta_length;
                 self.next_position += vector_away_from_other * overlap_amount;
             }
         }
@@ -167,7 +179,8 @@ impl GameThing for Entity {
             Some(goal) => {
                 let delta = goal.clone() - self.position.clone();
                 let delta_length = delta.length();
-                if delta_length < 1.0 * (self.goal_group_size as f32).sqrt() / 2.0 - 0.9 {
+                if delta_length < (1.0 * (self.goal_group_size as f32).sqrt() / 2.0 - 0.9).max(0.1)
+                {
                     self.goal = None;
                 } else {
                     self.next_position += delta.normalized() * self.speed;
