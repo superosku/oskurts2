@@ -18,11 +18,11 @@ use winit_input_helper::WinitInputHelper;
 
 mod camera;
 mod entity;
+mod entity_container;
 mod game;
 mod game_thing;
 mod ground;
 mod vec;
-mod entity_container;
 
 fn main() {
     println!("Hello, world!");
@@ -63,6 +63,8 @@ fn main() {
     let mut drag_pos: Option<Vec2f> = None;
 
     let mut selected_ids: Vec<usize> = Vec::new();
+
+    let mut mouse_closest_entity_pos: Option<Vec2f> = None;
 
     event_loop
         .run(move |event, window_target| {
@@ -108,6 +110,29 @@ fn main() {
                                     );
                                 }
                                 _ => {}
+                            }
+
+                            if let Some(asdf) = &mouse_closest_entity_pos {
+                                let mut screen_pos = camera.world_to_screen(&asdf);
+                                let mut path_builder = PathBuilder::new();
+                                path_builder.move_to(screen_pos.x, screen_pos.y);
+                                path_builder.line_to(screen_pos.x + 10.0, screen_pos.y);
+                                path_builder.line_to(screen_pos.x + 10.0, screen_pos.y + 10.0);
+                                path_builder.line_to(screen_pos.x, screen_pos.y + 10.0);
+                                path_builder.close();
+
+                                let path = path_builder.finish();
+
+                                let stroke_style = &mut raqote::StrokeStyle::default();
+                                // stroke_style.width = camera.length_to_pixels(0.1);
+                                dt.fill(
+                                    &path,
+                                    &Source::Solid(SolidSource::from_unpremultiplied_argb(
+                                        0x80, 0xff, 0xff, 0xff,
+                                    )),
+                                    // stroke_style,
+                                    &DrawOptions::new(),
+                                );
                             }
 
                             for (dst, &src) in pixels
@@ -167,6 +192,8 @@ fn main() {
                         cursor.0 / 1.0, // TODO: /2.0 or /1.0 depends on the monitor... (scale factor?)
                         cursor.1 / 1.0,
                     ));
+
+                    mouse_closest_entity_pos = game.get_closest_entity_pos(&cursor_game_pos, 10.0);
 
                     if input.mouse_pressed(1) {
                         game.command_entities_move(&selected_ids, &cursor_game_pos);
