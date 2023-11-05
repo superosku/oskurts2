@@ -22,6 +22,7 @@ mod game;
 mod game_thing;
 mod ground;
 mod vec;
+mod entity_container;
 
 fn main() {
     println!("Hello, world!");

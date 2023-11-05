@@ -5,9 +5,10 @@ use crate::ground::{Ground, GroundType};
 use crate::vec::Vec2f;
 use rand::Rng;
 use raqote::{DrawOptions, DrawTarget, PathBuilder, SolidSource, Source};
+use crate::entity_container::EntityContainer;
 
 pub struct Game {
-    entities: Vec<Entity>,
+    entity_container: EntityContainer,
     ground: Ground,
 }
 
@@ -24,7 +25,7 @@ impl Game {
         }
 
         Game {
-            entities,
+            entity_container: EntityContainer::new(entities),
             ground: Ground::new(),
         }
     }
@@ -34,7 +35,7 @@ impl Game {
         let mut selection_path_builder = PathBuilder::new();
         let mut goal_path = PathBuilder::new();
 
-        for entity in self.entities.iter() {
+        for entity in self.entity_container.iter_all() {
             // entity.draw(dt, camera);
             let entity_position = entity.get_position();
 
@@ -164,7 +165,7 @@ impl Game {
 
     pub fn entity_ids_in_bounding_box(&self, top_left: Vec2f, bottom_right: Vec2f) -> Vec<usize> {
         let mut entity_ids: Vec<usize> = Vec::new();
-        for entity in self.entities.iter() {
+        for entity in self.entity_container.iter_all() {
             let entity_position = entity.get_position();
             if entity_position.x >= top_left.x
                 && entity_position.x <= bottom_right.x
@@ -179,7 +180,7 @@ impl Game {
 
     pub fn command_entities_move(&mut self, entity_ids: &Vec<usize>, goal_pos: &Vec2f) {
         // let mut goals = self.ground.generate_goals(goal_pos, entity_ids.len() as i32);
-        for entity in self.entities.iter_mut() {
+        for entity in self.entity_container.iter_all_mut() {
             if entity_ids.contains(&entity.get_id()) {
                 // let goal = goals.pop().unwrap();
                 // entity.set_goal(&goal_pos);
@@ -192,23 +193,25 @@ impl Game {
 impl GameThing for Game {
     fn update(&mut self) {
         // Update entities
-        for entity in self.entities.iter_mut() {
+        for entity in self.entity_container.iter_all_mut() {
             entity.update();
         }
-        for i1 in 0..self.entities.len() {
-            for i2 in 0..self.entities.len() {
+        for i1 in 0..self.entity_container.entity_count() {
+            for i2 in 0..self.entity_container.entity_count() {
                 if i1 == i2 {
                     continue;
                 }
-                let entity2 = &mut self.entities[i2];
+                // let entity2 = &mut self.entities[i2];
+                let entity2 = self.entity_container.get_entity_at_index(i2).unwrap();
                 let entity2_position = entity2.get_position();
                 let entity2_radius = entity2.get_radius();
 
-                let entity1 = &mut self.entities[i1];
+                let entity1 = self.entity_container.get_entity_at_index(i1).unwrap();
+                // let entity1 = &mut self.entities[i1];
                 entity1.get_pushed(entity2_position, entity2_radius);
             }
         }
-        for entity in self.entities.iter_mut() {
+        for entity in self.entity_container.iter_all_mut() {
             entity.collide_with_ground(&self.ground);
             entity.flip_position();
         }
