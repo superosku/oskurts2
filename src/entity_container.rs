@@ -89,13 +89,12 @@ impl EntityContainer {
                 match self.entities_by_area.get(&(x, y)) {
                     Some(entities) => {
                         for entity_rc in entities.iter() {
-                            // let entity = entity_rc.borrow();
-                            // let entity_position = entity.get_position();
-                            // let distance = (entity_position - position.clone()).length();
-                            // if distance < closest_distance && distance < max_radius {
-                            //     closest_distance = distance;
-                            //     closest_entity = Some(entity_rc);
-                            // }
+                            let entity = entity_rc.borrow();
+                            let entity_position = entity.get_position();
+                            let distance = (entity_position - position.clone()).length();
+                            if distance < max_radius {
+                                entities_in_radius.push(entity_rc.clone());
+                            }
                         }
                     }
                     None => {}

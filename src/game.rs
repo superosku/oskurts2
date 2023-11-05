@@ -1,4 +1,5 @@
 use crate::camera::Camera;
+use crate::constants::{ENTITY_AMOUNT, GROUND_HEIGHT, GROUND_WIDTH};
 use crate::entity::Entity;
 use crate::entity_container::EntityContainer;
 use crate::game_thing::GameThing;
@@ -6,6 +7,7 @@ use crate::ground::{Ground, GroundType};
 use crate::vec::Vec2f;
 use rand::Rng;
 use raqote::{DrawOptions, DrawTarget, PathBuilder, SolidSource, Source};
+use std::ops::Deref;
 
 pub struct Game {
     entity_container: EntityContainer,
@@ -17,10 +19,10 @@ impl Game {
         let mut entities: Vec<Entity> = Vec::new();
 
         // Spawn 10 entities at random positions in the range of -10, 10
-        for _ in 0..5000 {
+        for _ in 0..ENTITY_AMOUNT {
             let mut rng = rand::thread_rng();
-            let x = rng.gen_range(1.0..79.0);
-            let y = rng.gen_range(1.0..59.0);
+            let x = rng.gen_range(1.0..GROUND_WIDTH as f32 - 1.0);
+            let y = rng.gen_range(1.0..GROUND_HEIGHT as f32 - 1.0);
             entities.push(Entity::new(Vec2f::new(x, y)));
         }
 
@@ -229,29 +231,29 @@ impl Game {
 
 impl GameThing for Game {
     fn update(&mut self) {
+        // Make sure entity container is up to date
         self.entity_container.update_entities_by_area();
+
         // Update entities
         for entity in self.entity_container.iter_all_mut() {
             entity.borrow_mut().update();
         }
-        for i1 in 0..self.entity_container.entity_count() {
-            for i2 in 0..self.entity_container.entity_count() {
-                if i1 == i2 {
+        for entity1 in self.entity_container.iter_all() {
+            let entity1_position = entity1.borrow().get_position();
+
+            for entity in self
+                .entity_container
+                .entities_in_radius(&entity1_position, 2.0)
+                .iter()
+            {
+                if entity.borrow().get_id() == entity1.borrow().get_id() {
                     continue;
                 }
-                // let entity2 = &mut self.entities[i2];
-                let (entity2_position, entity2_radius) = {
-                    let entity2 = self.entity_container.get_entity_at_index(i2);
-                    let entity2_position = entity2.borrow().get_position();
-                    let entity2_radius = entity2.borrow().get_radius();
-                    (entity2_position, entity2_radius)
-                };
-
-                let entity1 = self.entity_container.get_entity_at_index(i1);
-                // let entity1 = &mut self.entities[i1];
+                let other_position = entity.borrow().get_position();
+                let other_radius = entity.borrow().get_radius();
                 entity1
                     .borrow_mut()
-                    .get_pushed(entity2_position, entity2_radius);
+                    .get_pushed(other_position, other_radius);
             }
         }
         for entity in self.entity_container.iter_all_mut() {

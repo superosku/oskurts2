@@ -7,7 +7,7 @@ use crate::game::Game;
 use crate::game_thing::GameThing;
 use crate::vec::Vec2f;
 
-use crate::camera::{SCREEN_HEIGHT, SCREEN_WIDTH};
+use crate::constants::{SCREEN_HEIGHT, SCREEN_WIDTH};
 use pixels::{Pixels, SurfaceTexture};
 use winit::keyboard::KeyCode;
 use winit::{
@@ -17,6 +17,7 @@ use winit::{
 use winit_input_helper::WinitInputHelper;
 
 mod camera;
+mod constants;
 mod entity;
 mod entity_container;
 mod game;
