@@ -133,4 +133,32 @@ impl Ground {
         //     }
         // }
     }
+
+    pub fn generate_goals(&self, center: &Vec2f, number: i32) -> Vec<Vec2f> {
+        let mut goals: Vec<Vec2f> = Vec::new();
+
+        // Generate points around center in a hex pattern
+        if !self.blocked_at(center.x as i32, center.y as i32) {
+            goals.push(center.clone());
+        }
+        // goals.push(center.clone());
+
+        for radius in 1..100 {
+            for i in 0..radius * 6 {
+                let angle = i as f32 / (radius * 6) as f32 * 2.0 * std::f32::consts::PI;
+                let x = center.x + angle.cos() * radius as f32;
+                let y = center.y + angle.sin() * radius as f32;
+
+                if !self.blocked_at(x as i32, y as i32) {
+                    goals.push(Vec2f::new(x, y));
+                }
+
+                if goals.len() >= number as usize {
+                    return goals;
+                }
+            }
+        }
+
+        goals
+    }
 }

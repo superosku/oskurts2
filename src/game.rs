@@ -32,6 +32,7 @@ impl Game {
     fn draw_entities(&self, dt: &mut DrawTarget, camera: &Camera, selected_entiy_ids: &Vec<usize>) {
         let mut path_builder = PathBuilder::new();
         let mut selection_path_builder = PathBuilder::new();
+        let mut goal_path = PathBuilder::new();
 
         for entity in self.entities.iter() {
             // entity.draw(dt, camera);
@@ -54,8 +55,12 @@ impl Game {
             );
 
             if selected_entiy_ids.contains(&entity.get_id()) {
-                let source =
-                    Source::Solid(SolidSource::from_unpremultiplied_argb(255, 255, 255, 255));
+                if let Some(goal) = entity.get_goal() {
+                    let goal_pos = camera.world_to_screen(&Vec2f::new(goal.x, goal.y));
+
+                    goal_path.move_to(draw_pos.x, draw_pos.y);
+                    goal_path.line_to(goal_pos.x, goal_pos.y);
+                }
 
                 let top_right_corner = camera.world_to_screen(&Vec2f::new(
                     entity_position.x - 0.5,
@@ -72,7 +77,7 @@ impl Game {
         }
 
         let path = path_builder.finish();
-        let source = Source::Solid(SolidSource::from_unpremultiplied_argb(255, 128, 128, 255));
+        let source = Source::Solid(SolidSource::from_unpremultiplied_argb(128, 128, 128, 255));
         // let source_dark = Source::Solid(SolidSource::from_unpremultiplied_argb(255, 200, 200, 255));
 
         dt.fill(&path, &source, &DrawOptions::new());
@@ -88,6 +93,13 @@ impl Game {
             stroke_style,
             &DrawOptions::new(),
         );
+
+        dt.stroke(
+            &goal_path.finish(),
+            &selection_source,
+            stroke_style,
+            &DrawOptions::new(),
+        )
 
         // let stroke_style = &mut raqote::StrokeStyle::default();
         // stroke_style.width = camera.length_to_pixels(0.1);
@@ -166,9 +178,12 @@ impl Game {
     }
 
     pub fn command_entities_move(&mut self, entity_ids: &Vec<usize>, goal_pos: &Vec2f) {
+        // let mut goals = self.ground.generate_goals(goal_pos, entity_ids.len() as i32);
         for entity in self.entities.iter_mut() {
             if entity_ids.contains(&entity.get_id()) {
-                entity.set_goal(&goal_pos);
+                // let goal = goals.pop().unwrap();
+                // entity.set_goal(&goal_pos);
+                entity.set_goal(&goal_pos, entity_ids.len() as i32);
             }
         }
     }

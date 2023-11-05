@@ -6,6 +6,7 @@ pub struct Entity {
     position: Vec2f,
     next_position: Vec2f,
     goal: Option<Vec2f>,
+    goal_group_size: i32,
     speed: f32,
     id: usize,
 }
@@ -17,9 +18,11 @@ impl Entity {
         Entity {
             position: position.clone(),
             next_position: position.clone(),
-            goal: Some(Vec2f::new(10.0, 10.0)),
+            // goal: Some(Vec2f::new(10.0, 10.0)),
+            goal: None,
             speed: 0.05,
             id: random_id,
+            goal_group_size: 1,
         }
     }
 
@@ -27,16 +30,29 @@ impl Entity {
         self.id
     }
 
-    pub fn set_goal(&mut self, goal: &Vec2f) {
+    pub fn set_goal(&mut self, goal: &Vec2f, goal_group_size: i32) {
         self.goal = Some(goal.clone());
+        self.goal_group_size = goal_group_size;
     }
 
     pub fn get_position(&self) -> Vec2f {
         self.position.clone()
     }
 
+    pub fn get_goal(&self) -> Option<Vec2f> {
+        self.goal.clone()
+    }
+
     pub fn get_pushed(&mut self, other_position: Vec2f) {
         let delta = self.position.clone() - other_position;
+        if delta.length() == 0.0 {
+            println!("Delta length is 0.0");
+            let random_value =
+                (self.id & 18446744073709551615) as f32 / 18446744073709551615.0 / 10.0;
+            self.next_position += Vec2f::new(random_value, 0.0);
+            return;
+        }
+
         let delta_length = delta.length();
         if delta_length < 1.0 {
             let vector_away_from_other = delta.normalized();
@@ -151,14 +167,18 @@ impl GameThing for Entity {
             Some(goal) => {
                 let delta = goal.clone() - self.position.clone();
                 let delta_length = delta.length();
-                // if delta_length < 0.1 {
-                //     self.goal = None;
-                // } else {
-                self.next_position += delta.normalized() * self.speed;
+                if delta_length < 1.0 * (self.goal_group_size as f32).sqrt() / 2.0 - 0.9 {
+                    self.goal = None;
+                } else {
+                    self.next_position += delta.normalized() * self.speed;
+                }
+                // let speed = (self.next_position.clone() - self.position.clone()).length();
+                // if speed < self.speed / 2.0 {
+                //     println!("Going half the speed");
                 // }
             }
             None => {
-                println!("No goal set");
+                // println!("No goal set");
             }
         }
     }
