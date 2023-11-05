@@ -7,7 +7,9 @@ edition = "2021"
 
 [dependencies]
 font-kit = "0.11.0"
-minifb = "0.25.0"
+pixels = "0.13.0"
 rand = "0.8.5"
 raqote = "0.8.3"
 rayon = "1.8.0"
+winit = { version = "0.29.3", features = ["rwh_05"]}
+winit_input_helper = "0.15.0"

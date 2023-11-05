@@ -1,15 +1,25 @@
-use minifb::{Key, MouseButton, MouseMode, Window, WindowOptions};
 use rand::Rng;
 use raqote::{
-    DrawOptions, DrawTarget, LineCap, LineJoin, PathBuilder, SolidSource, Source, StrokeStyle,
+    DrawOptions, DrawTarget, PathBuilder, SolidSource, Source
 };
 use rayon::prelude::*;
-use std::os::unix::raw::uid_t;
 use std::time::{Duration, Instant};
 
 use crate::game::Game;
 use crate::game_thing::GameThing;
 use crate::vec::Vec2f;
+
+use crate::camera::{SCREEN_HEIGHT, SCREEN_WIDTH};
+use pixels::{Pixels, SurfaceTexture};
+use winit::{
+    dpi::LogicalSize,
+    event::{Event},
+    event::WindowEvent,
+    event_loop::EventLoop,
+    window::WindowBuilder,
+};
+use winit::keyboard::KeyCode;
+use winit_input_helper::WinitInputHelper;
 
 mod camera;
 mod entity;
@@ -21,154 +31,178 @@ mod vec;
 fn main() {
     println!("Hello, world!");
 
-    let mut window = Window::new(
-        "Rts2",
-        camera::SCREEN_WIDTH,
-        camera::SCREEN_HEIGHT,
-        WindowOptions {
-            ..WindowOptions::default()
-        },
-    )
-    .unwrap();
+    let event_loop = EventLoop::new().unwrap();
+    let mut input = WinitInputHelper::new();
+
+    let window = {
+        let size = LogicalSize::new(SCREEN_WIDTH as f64, SCREEN_HEIGHT as f64);
+        let scaled_size = LogicalSize::new(SCREEN_WIDTH as f64 * 1.0, SCREEN_HEIGHT as f64 * 1.0);
+        WindowBuilder::new()
+            .with_title("Conway's Game of Life")
+            .with_inner_size(scaled_size)
+            .with_min_inner_size(size)
+            .build(&event_loop)
+            .unwrap()
+    };
+
+    let mut pixels = {
+        let window_size = window.inner_size();
+        let surface_texture = SurfaceTexture::new(window_size.width, window_size.height, &window);
+        Pixels::new(SCREEN_WIDTH as u32, SCREEN_HEIGHT as u32, surface_texture).unwrap()
+    };
 
     let mut camera = camera::Camera::new();
 
-    let size = window.get_size();
-    let mut dt = DrawTarget::new(size.0 as i32, size.1 as i32);
+    let mut dt = DrawTarget::new(SCREEN_WIDTH as i32, SCREEN_HEIGHT as i32);
 
     let mut game = Game::new();
 
-    let target_fps = 60;
-    let frame_duration = Duration::from_secs(1) / target_fps as u32;
+    // let target_fps = 60;
+    // let frame_duration = Duration::from_secs(1) / target_fps as u32;
 
     let mut last_frame_time = Instant::now();
     let mut last_second_fpses: Vec<f32> = Vec::new();
 
     let mut drag_start_pos: Option<Vec2f> = None;
+    let mut drag_pos: Option<Vec2f> = None;
 
     let mut selected_ids: Vec<usize> = Vec::new();
 
-    let mut right_button_pressed = false;
-    let mut right_button_down = false;
+    event_loop.run(move |event, window_target| {
+        match &event {
+            Event::WindowEvent { window_id, event: window_event } => {
+                match window_event {
+                    WindowEvent::CloseRequested => {
+                        window_target.exit();
+                    }
+                    WindowEvent::RedrawRequested => {
+                        dt.clear(SolidSource::from_unpremultiplied_argb(
+                            0xff, 0x00, 0x00, 0x00,
+                        ));
+                        game.draw(&mut dt, &camera, &selected_ids);
 
-    while window.is_open() && !window.is_key_down(Key::Escape) {
-        let now = Instant::now();
-        let frame_time = now - last_frame_time;
+                        match (&drag_start_pos, &drag_pos) {
+                            (Some(pos1), Some(pos2)) => {
+                                let mut screen_start_pos = camera.world_to_screen(&pos1);
+                                let mut screen_end_pos = camera.world_to_screen(&pos2);
 
-        if frame_time >= frame_duration {
+                                // Draw a rectangle from drag_start_pos to mouse_pos_game
+                                let mut path_builder = PathBuilder::new();
+                                path_builder.move_to(screen_start_pos.x, screen_start_pos.y);
+                                path_builder.line_to(screen_end_pos.x, screen_start_pos.y);
+                                path_builder.line_to(screen_end_pos.x, screen_end_pos.y);
+                                path_builder.line_to(screen_start_pos.x, screen_end_pos.y);
+                                path_builder.close();
+
+                                let path = path_builder.finish();
+
+                                let stroke_style = &mut raqote::StrokeStyle::default();
+                                // stroke_style.width = camera.length_to_pixels(0.1);
+                                dt.fill(
+                                    &path,
+                                    &Source::Solid(SolidSource::from_unpremultiplied_argb(
+                                        0x80, 0xff, 0xff, 0xff,
+                                    )),
+                                    // stroke_style,
+                                    &DrawOptions::new(),
+                                );
+                            }
+                            _ => {}
+                        }
+
+                        for (dst, &src) in pixels
+                            .frame_mut()
+                            .chunks_exact_mut(4)
+                            .zip(dt.get_data().iter())
+                        {
+                            dst[0] = (src >> 16) as u8;
+                            dst[1] = (src >> 8) as u8;
+                            dst[2] = src as u8;
+                            dst[3] = (src >> 24) as u8;
+                        }
+
+                        pixels.render().unwrap();
+                    }
+                    _ => {
+                    }
+                }
+            }
+            _ => {
+            }
+        }
+
+        if input.update(&event) {
+            let now = Instant::now();
+            let frame_time = now - last_frame_time;
             last_frame_time = now;
-        } else {
-            continue;
-            // std::thread::sleep(frame_duration - frame_time);
-        }
 
-        dt.clear(SolidSource::from_unpremultiplied_argb(
-            0xff, 0x00, 0x00, 0x00,
-        ));
-
-        if window.is_key_down(Key::A) {
-            camera.move_position(&Vec2f::new(-1.0, 0.0));
-        }
-        if window.is_key_down(Key::D) {
-            camera.move_position(&Vec2f::new(1.0, 0.0));
-        }
-        if window.is_key_down(Key::W) {
-            camera.move_position(&Vec2f::new(0.0, -1.0));
-        }
-        if window.is_key_down(Key::S) {
-            camera.move_position(&Vec2f::new(0.0, 1.0));
-        }
-
-        match window.get_scroll_wheel() {
-            Some((_, y_scroll)) => {
-                println!("Scroll: {}", y_scroll);
-                if y_scroll != 0.0 {
-                    camera.zoom(1.0 + y_scroll as f32 * 0.01);
-                }
+            let current_fps = 1.0 / frame_time.as_secs_f32();
+            last_second_fpses.push(current_fps);
+            if last_second_fpses.len() > 60 {
+                last_second_fpses.remove(0);
             }
-            _ => {}
-        }
+            let average_fps = last_second_fpses.iter().sum::<f32>() / last_second_fpses.len() as f32;
+            window.set_title(&format!("Rts2 - FPS: {}", average_fps));
 
-        let current_fps = 1.0 / frame_time.as_secs_f32();
-        last_second_fpses.push(current_fps);
-        if last_second_fpses.len() > 60 {
-            last_second_fpses.remove(0);
-        }
-        let average_fps = last_second_fpses.iter().sum::<f32>() / last_second_fpses.len() as f32;
-        window.set_title(&format!("Rts2 - FPS: {}", average_fps));
-
-        game.update();
-        game.draw(&mut dt, &camera, &selected_ids);
-
-        let mouse_pos = window.get_mouse_pos(MouseMode::Clamp).unwrap();
-        let mouse_pos_game = camera.screen_to_world(&Vec2f::new(mouse_pos.0, mouse_pos.1));
-        let left_button_down = window.get_mouse_down(MouseButton::Left);
-
-        let new_right_button_down = window.get_mouse_down(MouseButton::Right);
-        if new_right_button_down && !right_button_down {
-            right_button_pressed = true;
-        } else {
-            right_button_pressed = false;
-        }
-        right_button_down = new_right_button_down;
-
-        if right_button_pressed {
-            println!("Commading a move");
-            game.command_entities_move(&selected_ids, &mouse_pos_game);
-        }
-
-        if left_button_down {
-            match &drag_start_pos {
-                Some(start_pos) => {
-                    let mut screen_start_pos = camera.world_to_screen(&start_pos);
-                    let mut screen_end_pos = camera.world_to_screen(&mouse_pos_game);
-
-                    // Draw a rectangle from drag_start_pos to mouse_pos_game
-                    let mut path_builder = PathBuilder::new();
-                    path_builder.move_to(screen_start_pos.x, screen_start_pos.y);
-                    path_builder.line_to(screen_end_pos.x, screen_start_pos.y);
-                    path_builder.line_to(screen_end_pos.x, screen_end_pos.y);
-                    path_builder.line_to(screen_start_pos.x, screen_end_pos.y);
-                    path_builder.close();
-
-                    let path = path_builder.finish();
-
-                    let stroke_style = &mut raqote::StrokeStyle::default();
-                    // stroke_style.width = camera.length_to_pixels(0.1);
-                    dt.fill(
-                        &path,
-                        &Source::Solid(SolidSource::from_unpremultiplied_argb(
-                            0x80, 0xff, 0xff, 0xff,
-                        )),
-                        // stroke_style,
-                        &DrawOptions::new(),
-                    );
-                }
-                None => {
-                    drag_start_pos = Some(mouse_pos_game);
-                }
+            if input.key_held(KeyCode::KeyA) {
+                camera.move_position(&Vec2f::new(-1.0, 0.0));
             }
-        } else {
-            match &drag_start_pos {
-                Some(start_pos) => {
-                    selected_ids = game.entity_ids_in_bounding_box(
-                        Vec2f::new(
-                            start_pos.x.min(mouse_pos_game.x),
-                            start_pos.y.min(mouse_pos_game.y),
-                        ),
-                        Vec2f::new(
-                            start_pos.x.max(mouse_pos_game.x),
-                            start_pos.y.max(mouse_pos_game.y),
-                        ),
-                    );
+            if input.key_held(KeyCode::KeyD) {
+                camera.move_position(&Vec2f::new(1.0, 0.0));
+            }
+            if input.key_held(KeyCode::KeyW) {
+                camera.move_position(&Vec2f::new(0.0, -1.0));
+            }
+            if input.key_held(KeyCode::KeyS) {
+                camera.move_position(&Vec2f::new(0.0, 1.0));
+            }
+
+            let scroll_diff = input.scroll_diff();
+            if scroll_diff.1 != 0.0 {
+                camera.zoom(1.0 + scroll_diff.1 / 100.0);
+            }
+
+            let cursor_option = input.cursor();
+            if let Some(cursor) = cursor_option {
+                let cursor_game_pos = camera.screen_to_world(&Vec2f::new(
+                    cursor.0 / 2.0,
+                    cursor.1 / 2.0,
+                ));
+
+                if input.mouse_pressed(1) {
+                    game.command_entities_move(&selected_ids, &cursor_game_pos);
+                }
+                if input.mouse_pressed(0) {
+                    drag_start_pos = Some(cursor_game_pos.clone());
+                    drag_pos = Some(cursor_game_pos.clone());
+                }
+                if input.mouse_held(0) {
+                    drag_pos = Some(cursor_game_pos.clone());
+                } else {
+                    match (&drag_start_pos, &drag_pos) {
+                        (Some(p1), Some(p2)) => {
+                            selected_ids = game.entity_ids_in_bounding_box(
+                                Vec2f::new(
+                                    p1.x.min(p2.x),
+                                    p1.y.min(p2.y),
+                                ),
+                                Vec2f::new(
+                                    p1.x.max(p2.x),
+                                    p1.y.max(p2.y),
+                                ),
+                            );
+                        }
+                        _ => {}
+                    }
+
                     drag_start_pos = None;
+                    drag_pos = None;
                 }
-                None => {}
             }
-        }
 
-        window
-            .update_with_buffer(dt.get_data(), size.0, size.1)
-            .unwrap();
-    }
+            game.update();
+
+            window.request_redraw();
+        }
+    }).unwrap();
 }
