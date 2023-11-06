@@ -2,7 +2,6 @@ use crate::camera::Camera;
 use crate::constants::{ENTITY_AMOUNT, GROUND_HEIGHT, GROUND_WIDTH};
 use crate::entity::Entity;
 use crate::entity_container::EntityContainer;
-use crate::game_thing::GameThing;
 use crate::ground::{Ground, GroundType};
 use crate::vec::Vec2f;
 use rand::Rng;
@@ -45,7 +44,7 @@ impl Game {
 
         match (
             self.entity_container
-                .get_closest_entity(position, max_radius),
+                .get_closest_entity(position, max_radius, None, None),
             self.entity_container
                 .get_closest_entity_brute_force(position, max_radius),
         ) {
@@ -271,7 +270,7 @@ impl Game {
 
     pub fn command_entities_move(&mut self, entity_ids: &Vec<usize>, goal_pos: &Vec2f) {
         // let mut goals = self.ground.generate_goals(goal_pos, entity_ids.len() as i32);
-        for entity in self.entity_container.iter_all_mut() {
+        for entity in self.entity_container.iter_all() {
             if entity_ids.contains(&entity.borrow().get_id()) {
                 // let goal = goals.pop().unwrap();
                 // entity.set_goal(&goal_pos);
@@ -281,16 +280,21 @@ impl Game {
             }
         }
     }
-}
 
-impl GameThing for Game {
-    fn update(&mut self) {
+    pub fn update(&mut self) {
         // Make sure entity container is up to date
         self.entity_container.update_entities_by_area();
 
         // Update entities
-        for entity in self.entity_container.iter_all_mut() {
-            entity.borrow_mut().update();
+        for entity in self.entity_container.iter_all() {
+            let closest_enemy = self.entity_container.get_closest_entity(
+                &entity.borrow().get_position(),
+                5.0,
+                None,
+                Some(entity.borrow().get_team()),
+            );
+
+            entity.borrow_mut().update(closest_enemy);
         }
         for entity1 in self.entity_container.iter_all() {
             let entity1_position = entity1.borrow().get_position();
@@ -310,7 +314,7 @@ impl GameThing for Game {
                     .get_pushed(other_position, other_radius);
             }
         }
-        for entity in self.entity_container.iter_all_mut() {
+        for entity in self.entity_container.iter_all() {
             entity.borrow_mut().collide_with_ground(&self.ground);
             entity.borrow_mut().flip_position();
         }

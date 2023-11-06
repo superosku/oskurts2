@@ -26,10 +26,10 @@ impl EntityContainer {
     pub fn iter_all(&self) -> std::slice::Iter<Rc<RefCell<Entity>>> {
         return self.entities_rc.iter();
     }
-
-    pub fn iter_all_mut(&mut self) -> std::slice::IterMut<Rc<RefCell<Entity>>> {
-        return self.entities_rc.iter_mut();
-    }
+    //
+    // pub fn iter_all_mut(&mut self) -> std::slice::IterMut<Rc<RefCell<Entity>>> {
+    //     return self.entities_rc.iter_mut();
+    // }
 
     pub fn entity_count(&self) -> usize {
         self.entities_rc.len()
@@ -107,6 +107,8 @@ impl EntityContainer {
         &self,
         position: &Vec2f,
         max_radius: f32,
+        filter_team: Option<u8>,
+        filter_not_team: Option<u8>,
     ) -> Option<&Rc<RefCell<Entity>>> {
         let min_x = (position.x - max_radius) as i32 / self.area_divider as i32;
         let max_x = (position.x + max_radius) as i32 / self.area_divider as i32;
@@ -122,6 +124,19 @@ impl EntityContainer {
                     Some(entities) => {
                         for entity_rc in entities.iter() {
                             let entity = entity_rc.borrow();
+                            let entity_team = entity.get_team();
+
+                            if let Some(filter_team) = filter_team {
+                                if entity_team != filter_team {
+                                    continue;
+                                }
+                            }
+                            if let Some(filter_not_team) = filter_not_team {
+                                if entity_team == filter_not_team {
+                                    continue;
+                                }
+                            }
+
                             let entity_position = entity.get_position();
                             let distance = (entity_position - position.clone()).length();
                             if distance < closest_distance && distance < max_radius {

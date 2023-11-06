@@ -4,7 +4,6 @@ use rayon::prelude::*;
 use std::time::{Duration, Instant};
 
 use crate::game::Game;
-use crate::game_thing::GameThing;
 use crate::vec::Vec2f;
 
 use crate::constants::{SCREEN_HEIGHT, SCREEN_WIDTH};

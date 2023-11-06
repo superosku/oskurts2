@@ -1,6 +1,7 @@
-use crate::game_thing::GameThing;
 use crate::ground::Ground;
 use crate::vec::Vec2f;
+use std::cell::RefCell;
+use std::rc::Rc;
 
 pub struct Entity {
     position: Vec2f,
@@ -179,10 +180,8 @@ impl Entity {
             }
         }
     }
-}
 
-impl GameThing for Entity {
-    fn update(&mut self) {
+    pub fn update(&mut self, closest_enemy: Option<&Rc<RefCell<Entity>>>) {
         match &self.goal {
             Some(goal) => {
                 let delta = goal.clone() - self.position.clone();
@@ -193,13 +192,19 @@ impl GameThing for Entity {
                 } else {
                     self.next_position += delta.normalized() * self.speed;
                 }
-                // let speed = (self.next_position.clone() - self.position.clone()).length();
-                // if speed < self.speed / 2.0 {
-                //     println!("Going half the speed");
-                // }
             }
             None => {
-                // println!("No goal set");
+                if let Some(closest_enemy) = closest_enemy {
+                    let delta = closest_enemy.borrow().position.clone() - self.position.clone();
+                    let delta_length = delta.length();
+                    let combined_length = self.radius + closest_enemy.borrow().radius;
+                    if delta_length > combined_length + 0.1 {
+                        self.next_position += delta.normalized() * self.speed;
+                    } else {
+                        // TODO: Put down a projectile
+                        // TODO: How about cooldown
+                    }
+                }
             }
         }
     }
