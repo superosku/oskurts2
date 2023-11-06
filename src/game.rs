@@ -3,14 +3,15 @@ use crate::constants::{ENTITY_AMOUNT, GROUND_HEIGHT, GROUND_WIDTH};
 use crate::entity::Entity;
 use crate::entity_container::EntityContainer;
 use crate::ground::{Ground, GroundType};
+use crate::projectile_handler::ProjectileHandler;
 use crate::vec::Vec2f;
 use rand::Rng;
 use raqote::{DrawOptions, DrawTarget, PathBuilder, SolidSource, Source};
-use std::ops::Deref;
 
 pub struct Game {
     entity_container: EntityContainer,
     ground: Ground,
+    projectile_handler: ProjectileHandler,
 }
 
 impl Game {
@@ -30,6 +31,7 @@ impl Game {
         Game {
             entity_container,
             ground: Ground::new(),
+            projectile_handler: ProjectileHandler::new(),
         }
     }
 
@@ -64,6 +66,34 @@ impl Game {
         }
     }
 
+    fn draw_projectiles(&self, dt: &mut DrawTarget, camera: &Camera) {
+        let mut path_builder = PathBuilder::new();
+
+        for projectile in self.projectile_handler.iter() {
+            let projectile_position = projectile.get_position();
+
+            let draw_pos =
+                camera.world_to_screen(&Vec2f::new(projectile_position.x, projectile_position.y));
+
+            path_builder.move_to(draw_pos.x, draw_pos.y);
+            path_builder.arc(
+                draw_pos.x,
+                draw_pos.y,
+                camera.length_to_pixels(0.1),
+                0.0,
+                2.0 * std::f32::consts::PI,
+            );
+        }
+
+        dt.fill(
+            &path_builder.finish(),
+            &Source::Solid(SolidSource::from_unpremultiplied_argb(
+                255, 0x00, 0x00, 0x00,
+            )),
+            &DrawOptions::new(),
+        );
+    }
+
     fn draw_entities(&self, dt: &mut DrawTarget, camera: &Camera, selected_entiy_ids: &Vec<usize>) {
         let mut selection_path_builder = PathBuilder::new();
         let mut goal_path = PathBuilder::new();
@@ -82,7 +112,7 @@ impl Game {
             &mut path_builder_3,
         ];
 
-        for entity_ref in self.entity_container.iter_all() {
+        for entity_ref in self.entity_container.iter_alive() {
             // entity.draw(dt, camera);
             let entity = entity_ref.borrow();
 
@@ -251,11 +281,12 @@ impl Game {
     pub fn draw(&self, dt: &mut DrawTarget, camera: &Camera, selected_entiy_ids: &Vec<usize>) {
         self.draw_ground(dt, camera);
         self.draw_entities(dt, camera, selected_entiy_ids);
+        self.draw_projectiles(dt, camera);
     }
 
     pub fn entity_ids_in_bounding_box(&self, top_left: Vec2f, bottom_right: Vec2f) -> Vec<usize> {
         let mut entity_ids: Vec<usize> = Vec::new();
-        for entity in self.entity_container.iter_all() {
+        for entity in self.entity_container.iter_alive() {
             let entity_position = entity.borrow().get_position();
             if entity_position.x >= top_left.x
                 && entity_position.x <= bottom_right.x
@@ -270,7 +301,7 @@ impl Game {
 
     pub fn command_entities_move(&mut self, entity_ids: &Vec<usize>, goal_pos: &Vec2f) {
         // let mut goals = self.ground.generate_goals(goal_pos, entity_ids.len() as i32);
-        for entity in self.entity_container.iter_all() {
+        for entity in self.entity_container.iter_alive() {
             if entity_ids.contains(&entity.borrow().get_id()) {
                 // let goal = goals.pop().unwrap();
                 // entity.set_goal(&goal_pos);
@@ -286,7 +317,7 @@ impl Game {
         self.entity_container.update_entities_by_area();
 
         // Update entities
-        for entity in self.entity_container.iter_all() {
+        for entity in self.entity_container.iter_alive() {
             let closest_enemy = self.entity_container.get_closest_entity(
                 &entity.borrow().get_position(),
                 5.0,
@@ -294,9 +325,11 @@ impl Game {
                 Some(entity.borrow().get_team()),
             );
 
-            entity.borrow_mut().update(closest_enemy);
+            entity
+                .borrow_mut()
+                .update(closest_enemy, &mut self.projectile_handler);
         }
-        for entity1 in self.entity_container.iter_all() {
+        for entity1 in self.entity_container.iter_alive() {
             let entity1_position = entity1.borrow().get_position();
 
             for entity in self
@@ -314,9 +347,29 @@ impl Game {
                     .get_pushed(other_position, other_radius);
             }
         }
-        for entity in self.entity_container.iter_all() {
+
+        for entity in self.entity_container.iter_alive() {
             entity.borrow_mut().collide_with_ground(&self.ground);
             entity.borrow_mut().flip_position();
         }
+
+        // Update projectiles
+        self.projectile_handler.progress_projectiles();
+        for projectile in self.projectile_handler.get_impacting_projectiles() {
+            if let Some(entity_hit) = self.entity_container.get_closest_entity(
+                &projectile.get_position(),
+                1.0,
+                None,
+                None, // TODO: Projectile should have team and we should filter out team members
+                      // Some(projectile.get_damage()),
+                      // Some(projectile.get_team()),
+            ) {
+                entity_hit.borrow_mut().take_damage(projectile.get_damage());
+            }
+        }
+        self.projectile_handler.remove_impacting_projectiles();
+
+        // Remove dead entities
+        self.entity_container.remove_dead();
     }
 }

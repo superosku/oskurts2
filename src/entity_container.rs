@@ -23,13 +23,21 @@ impl EntityContainer {
         }
     }
 
-    pub fn iter_all(&self) -> std::slice::Iter<Rc<RefCell<Entity>>> {
-        return self.entities_rc.iter();
-    }
-    //
-    // pub fn iter_all_mut(&mut self) -> std::slice::IterMut<Rc<RefCell<Entity>>> {
-    //     return self.entities_rc.iter_mut();
+    // pub fn iter_all(&self) -> std::slice::Iter<Rc<RefCell<Entity>>> {
+    //     return self.entities_rc.iter();
     // }
+
+    pub fn iter_alive(&self) -> std::slice::Iter<Rc<RefCell<Entity>>> {
+        return self.entities_rc.iter();
+        // // TODO:
+    }
+
+    pub fn remove_dead(&mut self) {
+        self.entities_rc.retain(|entity_rc| {
+            let entity = entity_rc.borrow();
+            entity.is_alive()
+        });
+    }
 
     pub fn entity_count(&self) -> usize {
         self.entities_rc.len()

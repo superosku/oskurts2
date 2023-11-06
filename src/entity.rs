@@ -1,7 +1,13 @@
 use crate::ground::Ground;
+use crate::projectile_handler::ProjectileHandler;
 use crate::vec::Vec2f;
 use std::cell::RefCell;
 use std::rc::Rc;
+
+pub enum EntityType {
+    Meelee,
+    Ranged,
+}
 
 pub struct Entity {
     position: Vec2f,
@@ -12,6 +18,10 @@ pub struct Entity {
     id: usize,
     radius: f32,
     team: u8,
+    projectile_cooldown: i32,
+    health: i32,
+    max_health: i32,
+    entity_type: EntityType,
 }
 
 impl Entity {
@@ -21,6 +31,12 @@ impl Entity {
         let random_radius = rand::random::<f32>() / 4.0 + 0.25;
         // let random_radius = 0.5;
         let random_team = rand::random::<u8>() % 2;
+
+        let random_entity_type = if rand::random::<f32>() < 0.5 {
+            EntityType::Meelee
+        } else {
+            EntityType::Ranged
+        };
 
         Entity {
             position: position.clone(),
@@ -32,7 +48,20 @@ impl Entity {
             goal_group_size: 1,
             radius: random_radius,
             team: random_team,
+            projectile_cooldown: 0,
+            health: 100,
+            max_health: 100,
+            entity_type: random_entity_type,
         }
+    }
+
+    pub fn is_alive(&self) -> bool {
+        self.health > 0
+    }
+
+    pub fn take_damage(&mut self, damage: i32) {
+        println!("Taking damage! {}", self.health);
+        self.health -= damage;
     }
 
     pub fn get_team(&self) -> u8 {
@@ -181,7 +210,11 @@ impl Entity {
         }
     }
 
-    pub fn update(&mut self, closest_enemy: Option<&Rc<RefCell<Entity>>>) {
+    pub fn update(
+        &mut self,
+        closest_enemy: Option<&Rc<RefCell<Entity>>>,
+        projectile_handler: &mut ProjectileHandler,
+    ) {
         match &self.goal {
             Some(goal) => {
                 let delta = goal.clone() - self.position.clone();
@@ -198,9 +231,33 @@ impl Entity {
                     let delta = closest_enemy.borrow().position.clone() - self.position.clone();
                     let delta_length = delta.length();
                     let combined_length = self.radius + closest_enemy.borrow().radius;
-                    if delta_length > combined_length + 0.1 {
+
+                    let min_range = match self.entity_type {
+                        EntityType::Ranged => 5.0,
+                        EntityType::Meelee => combined_length + 0.1,
+                    };
+
+                    if delta_length > min_range {
                         self.next_position += delta.normalized() * self.speed;
                     } else {
+                        if self.projectile_cooldown == 0 {
+                            match self.entity_type {
+                                EntityType::Ranged => {
+                                    projectile_handler.add_ranged_projectile(
+                                        self.position.clone(),
+                                        closest_enemy.borrow().position.clone(),
+                                    );
+                                }
+                                EntityType::Meelee => {
+                                    projectile_handler.add_meelee_projectile(
+                                        closest_enemy.borrow().position.clone(),
+                                    );
+                                }
+                            }
+                            self.projectile_cooldown = 100;
+                        } else {
+                            self.projectile_cooldown -= 1;
+                        }
                         // TODO: Put down a projectile
                         // TODO: How about cooldown
                     }

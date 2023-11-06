@@ -22,6 +22,8 @@ mod entity_container;
 mod game;
 mod game_thing;
 mod ground;
+mod projectile;
+mod projectile_handler;
 mod vec;
 
 fn main() {
@@ -196,8 +198,8 @@ fn main() {
                 let cursor_option = input.cursor();
                 if let Some(cursor) = cursor_option {
                     let cursor_game_pos = camera.screen_to_world(&Vec2f::new(
-                        cursor.0 / 1.0, // TODO: /2.0 or /1.0 depends on the monitor... (scale factor?)
-                        cursor.1 / 1.0,
+                        cursor.0 / 2.0, // TODO: /2.0 or /1.0 depends on the monitor... (scale factor?)
+                        cursor.1 / 2.0,
                     ));
 
                     mouse_closest_entity_pos = game.get_closest_entity_pos(&cursor_game_pos, 10.0);
