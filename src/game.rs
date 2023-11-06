@@ -66,9 +66,22 @@ impl Game {
     }
 
     fn draw_entities(&self, dt: &mut DrawTarget, camera: &Camera, selected_entiy_ids: &Vec<usize>) {
-        let mut path_builder = PathBuilder::new();
         let mut selection_path_builder = PathBuilder::new();
         let mut goal_path = PathBuilder::new();
+
+        // let mut path_builder = PathBuilder::new();
+
+        let mut path_builder_0 = PathBuilder::new();
+        let mut path_builder_1 = PathBuilder::new();
+        let mut path_builder_2 = PathBuilder::new();
+        let mut path_builder_3 = PathBuilder::new();
+
+        let mut path_builders = [
+            &mut path_builder_0,
+            &mut path_builder_1,
+            &mut path_builder_2,
+            &mut path_builder_3,
+        ];
 
         for entity_ref in self.entity_container.iter_all() {
             // entity.draw(dt, camera);
@@ -82,6 +95,8 @@ impl Game {
                 entity_position.x,
                 entity_position.y,
             ));
+
+            let path_builder = &mut path_builders[entity.get_team() as usize];
 
             path_builder.move_to(draw_pos.x, draw_pos.y);
             path_builder.arc(
@@ -114,13 +129,46 @@ impl Game {
             }
         }
 
-        let path = path_builder.finish();
-        let source = Source::Solid(SolidSource::from_unpremultiplied_argb(
-            255, 0x7d, 0xde, 0x92,
-        ));
+        // let path_bulider_sources = [
+        //     Source::Solid(SolidSource::from_unpremultiplied_argb( 255, 0x7d, 0xde, 0x92, )),
+        //     Source::Solid(SolidSource::from_unpremultiplied_argb( 255, 0xde, 0x7d, 0x92, )),
+        //     Source::Solid(SolidSource::from_unpremultiplied_argb( 255, 0xde, 0x92, 0x7d, )),
+        //     Source::Solid(SolidSource::from_unpremultiplied_argb( 255, 0x92, 0xde, 0x7d, )),
+        // ];
+
+        // for i in 0..4 {
+        // let path = path_builders[i].finish();
+        // let source = &path_bulider_sources[i];
         // let source_dark = Source::Solid(SolidSource::from_unpremultiplied_argb(255, 200, 200, 255));
 
-        dt.fill(&path, &source, &DrawOptions::new());
+        dt.fill(
+            &path_builder_0.finish(),
+            &Source::Solid(SolidSource::from_unpremultiplied_argb(
+                255, 0x7d, 0xde, 0x92,
+            )),
+            &DrawOptions::new(),
+        );
+        dt.fill(
+            &path_builder_1.finish(),
+            &Source::Solid(SolidSource::from_unpremultiplied_argb(
+                255, 0xde, 0x7d, 0x92,
+            )),
+            &DrawOptions::new(),
+        );
+        dt.fill(
+            &path_builder_2.finish(),
+            &Source::Solid(SolidSource::from_unpremultiplied_argb(
+                255, 0xde, 0x92, 0x7d,
+            )),
+            &DrawOptions::new(),
+        );
+        dt.fill(
+            &path_builder_3.finish(),
+            &Source::Solid(SolidSource::from_unpremultiplied_argb(
+                255, 0x92, 0xde, 0x7d,
+            )),
+            &DrawOptions::new(),
+        );
 
         let selection_path = selection_path_builder.finish();
         let selection_source =

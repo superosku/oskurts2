@@ -10,6 +10,7 @@ pub struct Entity {
     speed: f32,
     id: usize,
     radius: f32,
+    team: u8,
 }
 
 impl Entity {
@@ -18,6 +19,7 @@ impl Entity {
         // Radius should be random between 0.25 and 0.5
         let random_radius = rand::random::<f32>() / 4.0 + 0.25;
         // let random_radius = 0.5;
+        let random_team = rand::random::<u8>() % 2;
 
         Entity {
             position: position.clone(),
@@ -28,7 +30,12 @@ impl Entity {
             id: random_id,
             goal_group_size: 1,
             radius: random_radius,
+            team: random_team,
         }
+    }
+
+    pub fn get_team(&self) -> u8 {
+        self.team
     }
 
     pub fn get_radius(&self) -> f32 {
