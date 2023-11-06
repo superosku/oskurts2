@@ -67,6 +67,9 @@ fn main() {
 
     let mut mouse_closest_entity_pos: Option<Vec2f> = None;
 
+    let mut draw_time = Duration::from_secs(0);
+    let mut game_update_time = Duration::from_secs(0);
+
     event_loop
         .run(move |event, window_target| {
             match &event {
@@ -79,6 +82,8 @@ fn main() {
                             window_target.exit();
                         }
                         WindowEvent::RedrawRequested => {
+                            let draw_start = Instant::now();
+
                             dt.clear(SolidSource::from_unpremultiplied_argb(
                                 0xff, 0x00, 0x00, 0x00,
                             ));
@@ -148,6 +153,8 @@ fn main() {
                             }
 
                             pixels.render().unwrap();
+
+                            draw_time = Instant::now() - draw_start;
                         }
                         _ => {}
                     }
@@ -222,7 +229,9 @@ fn main() {
                     }
                 }
 
+                let game_update_start = Instant::now();
                 game.update();
+                game_update_time = Instant::now() - game_update_start;
 
                 window.request_redraw();
             }

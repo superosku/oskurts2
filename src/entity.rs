@@ -17,6 +17,7 @@ impl Entity {
         let random_id = rand::random::<usize>();
         // Radius should be random between 0.25 and 0.5
         let random_radius = rand::random::<f32>() / 4.0 + 0.25;
+        // let random_radius = 0.5;
 
         Entity {
             position: position.clone(),

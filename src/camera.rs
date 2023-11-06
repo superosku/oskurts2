@@ -1,4 +1,4 @@
-use crate::constants::{SCREEN_HEIGHT, SCREEN_WIDTH};
+use crate::constants::{GROUND_HEIGHT, GROUND_WIDTH, SCREEN_HEIGHT, SCREEN_WIDTH};
 use crate::vec;
 
 #[derive(Debug, Clone)]
@@ -10,7 +10,7 @@ pub struct Camera {
 impl Camera {
     pub fn new() -> Camera {
         Camera {
-            position: vec::Vec2f::new(10.0, 10.0),
+            position: vec::Vec2f::new(GROUND_WIDTH as f32 / 2.0, GROUND_HEIGHT as f32 / 2.0),
             zoom: 20.0,
         }
     }

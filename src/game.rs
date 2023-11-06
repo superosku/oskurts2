@@ -115,7 +115,9 @@ impl Game {
         }
 
         let path = path_builder.finish();
-        let source = Source::Solid(SolidSource::from_unpremultiplied_argb(128, 128, 128, 255));
+        let source = Source::Solid(SolidSource::from_unpremultiplied_argb(
+            255, 0x7d, 0xde, 0x92,
+        ));
         // let source_dark = Source::Solid(SolidSource::from_unpremultiplied_argb(255, 200, 200, 255));
 
         dt.fill(&path, &source, &DrawOptions::new());
@@ -188,8 +190,12 @@ impl Game {
 
         let ground_path = ground_path_builder.finish();
         let wall_path = wall_path_builder.finish();
-        let ground_source = Source::Solid(SolidSource::from_unpremultiplied_argb(255, 128, 64, 32));
-        let wall_source = Source::Solid(SolidSource::from_unpremultiplied_argb(255, 100, 100, 100));
+        let wall_source = Source::Solid(SolidSource::from_unpremultiplied_argb(
+            255, 0x89, 0x99, 0xa6,
+        ));
+        let ground_source = Source::Solid(SolidSource::from_unpremultiplied_argb(
+            255, 0x48, 0x40, 0x41,
+        ));
 
         dt.fill(&ground_path, &ground_source, &DrawOptions::new());
         dt.fill(&wall_path, &wall_source, &DrawOptions::new());

@@ -2,8 +2,6 @@ use crate::entity::Entity;
 use crate::vec::Vec2f;
 use std::cell::RefCell;
 use std::collections::HashMap;
-use std::iter::Map;
-use std::path::Iter;
 use std::rc::Rc;
 
 pub struct EntityContainer {
