@@ -329,6 +329,8 @@ impl Game {
                 .borrow_mut()
                 .update(closest_enemy, &mut self.projectile_handler);
         }
+
+        // Entities push each other
         for entity1 in self.entity_container.iter_alive() {
             let entity1_position = entity1.borrow().get_position();
 
@@ -348,8 +350,11 @@ impl Game {
             }
         }
 
+        // Entities collide with ground
         for entity in self.entity_container.iter_alive() {
             entity.borrow_mut().collide_with_ground(&self.ground);
+
+            // Flip updated position of each entity (should be done last after each move)
             entity.borrow_mut().flip_position();
         }
 
@@ -361,13 +366,11 @@ impl Game {
                 1.0,
                 None,
                 None, // TODO: Projectile should have team and we should filter out team members
-                      // Some(projectile.get_damage()),
-                      // Some(projectile.get_team()),
             ) {
                 entity_hit.borrow_mut().take_damage(projectile.get_damage());
             }
         }
-        self.projectile_handler.remove_impacting_projectiles();
+        self.projectile_handler.remove_impacting_projectiles(); // Since impacting projectiles have been handled, remove them
 
         // Remove dead entities
         self.entity_container.remove_dead();

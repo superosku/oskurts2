@@ -31,7 +31,7 @@ impl ProjectileHandler {
         let mut impacting_projectiles: Vec<&Projectile> = Vec::new();
         for projectile in self.projectiles.iter() {
             if projectile.ready_to_impact() {
-                impacting_projectiles.push(projectile.clone());
+                impacting_projectiles.push(projectile);
             }
             // let projectile_position = projectile.get_position();
             // let distance = projectile_position.distance_to(&position);
