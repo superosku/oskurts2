@@ -1,15 +1,18 @@
+use crate::building::Building;
+use crate::building_container::BuildingContainer;
 use crate::camera::Camera;
 use crate::constants::{ENTITY_AMOUNT, GROUND_HEIGHT, GROUND_WIDTH};
-use crate::entity::Entity;
+use crate::entity::{Entity, EntityType};
 use crate::entity_container::EntityContainer;
 use crate::ground::{Ground, GroundType};
 use crate::projectile_handler::ProjectileHandler;
-use crate::vec::Vec2f;
+use crate::vec::{Vec2f, Vec2i};
 use rand::Rng;
 use raqote::{DrawOptions, DrawTarget, PathBuilder, SolidSource, Source};
 
 pub struct Game {
     entity_container: EntityContainer,
+    building_container: BuildingContainer,
     ground: Ground,
     projectile_handler: ProjectileHandler,
 }
@@ -25,12 +28,21 @@ impl Game {
             let y = rng.gen_range(1.0..GROUND_HEIGHT as f32 - 1.0);
             entities.push(Entity::new(Vec2f::new(x, y)));
         }
-
         let mut entity_container = EntityContainer::new(entities);
+
+        let mut ground = Ground::new();
+
+        let mut building_container = BuildingContainer::new();
+        building_container.add_building(Building::new(Vec2i::new(2, 2), 3, 3, 0), &mut ground);
+        building_container.add_building(
+            Building::new(Vec2i::new(GROUND_WIDTH - 5, GROUND_HEIGHT - 5), 3, 3, 1),
+            &mut ground,
+        );
 
         Game {
             entity_container,
-            ground: Ground::new(),
+            building_container,
+            ground,
             projectile_handler: ProjectileHandler::new(),
         }
     }
@@ -92,6 +104,86 @@ impl Game {
             )),
             &DrawOptions::new(),
         );
+    }
+
+    fn draw_buildings(
+        &self,
+        dt: &mut DrawTarget,
+        camera: &Camera,
+        selected_building_id: &Option<usize>,
+    ) {
+        for building in self.building_container.get_buildings().iter() {
+            let mut path_builder = PathBuilder::new();
+            let mut selection_path_builder = PathBuilder::new();
+
+            let position = building.get_position();
+            let width = building.get_width();
+            let height = building.get_height();
+
+            let draw_pos = camera.world_to_screen(&Vec2f::new(
+                position.x as f32 + 0.1,
+                position.y as f32 + 0.1,
+            ));
+            path_builder.move_to(draw_pos.x, draw_pos.y);
+            path_builder.line_to(
+                draw_pos.x + camera.length_to_pixels(width as f32 - 0.2),
+                draw_pos.y,
+            );
+            path_builder.line_to(
+                draw_pos.x + camera.length_to_pixels(width as f32 - 0.2),
+                draw_pos.y + camera.length_to_pixels(height as f32 - 0.2),
+            );
+            path_builder.line_to(
+                draw_pos.x,
+                draw_pos.y + camera.length_to_pixels(height as f32 - 0.2),
+            );
+            path_builder.close();
+
+            let source = if building.get_team() == 0 {
+                Source::Solid(SolidSource::from_unpremultiplied_argb(
+                    255, 0x7d, 0xde, 0x92,
+                ))
+            } else {
+                Source::Solid(SolidSource::from_unpremultiplied_argb(
+                    255, 0xde, 0x7d, 0x92,
+                ))
+            };
+
+            dt.fill(&path_builder.finish(), &source, &DrawOptions::new());
+
+            if let Some(selected_building_id) = selected_building_id {
+                if *selected_building_id == building.get_id() {
+                    let selection_draw_pos =
+                        camera.world_to_screen(&Vec2f::new(position.x as f32, position.y as f32));
+                    selection_path_builder.move_to(selection_draw_pos.x, selection_draw_pos.y);
+                    selection_path_builder.line_to(
+                        selection_draw_pos.x + camera.length_to_pixels(width as f32),
+                        selection_draw_pos.y,
+                    );
+                    selection_path_builder.line_to(
+                        selection_draw_pos.x + camera.length_to_pixels(width as f32),
+                        selection_draw_pos.y + camera.length_to_pixels(height as f32),
+                    );
+                    selection_path_builder.line_to(
+                        selection_draw_pos.x,
+                        selection_draw_pos.y + camera.length_to_pixels(height as f32),
+                    );
+                    selection_path_builder.close();
+
+                    let selection_path = selection_path_builder.finish();
+                    let selection_source =
+                        Source::Solid(SolidSource::from_unpremultiplied_argb(255, 0, 255, 0));
+
+                    let stroke_style = &mut raqote::StrokeStyle::default();
+                    dt.stroke(
+                        &selection_path,
+                        &selection_source,
+                        stroke_style,
+                        &DrawOptions::new(),
+                    );
+                }
+            }
+        }
     }
 
     fn draw_entities(&self, dt: &mut DrawTarget, camera: &Camera, selected_entiy_ids: &Vec<usize>) {
@@ -278,13 +370,20 @@ impl Game {
         dt.fill(&wall_path, &wall_source, &DrawOptions::new());
     }
 
-    pub fn draw(&self, dt: &mut DrawTarget, camera: &Camera, selected_entiy_ids: &Vec<usize>) {
+    pub fn draw(
+        &self,
+        dt: &mut DrawTarget,
+        camera: &Camera,
+        selected_entiy_ids: &Vec<usize>,
+        selected_building_id: &Option<usize>,
+    ) {
         self.draw_ground(dt, camera);
         self.draw_entities(dt, camera, selected_entiy_ids);
+        self.draw_buildings(dt, camera, selected_building_id);
         self.draw_projectiles(dt, camera);
     }
 
-    pub fn entity_ids_in_bounding_box(&self, top_left: Vec2f, bottom_right: Vec2f) -> Vec<usize> {
+    pub fn entity_ids_in_bounding_box(&self, top_left: &Vec2f, bottom_right: &Vec2f) -> Vec<usize> {
         let mut entity_ids: Vec<usize> = Vec::new();
         for entity in self.entity_container.iter_alive() {
             let entity_position = entity.borrow().get_position();
@@ -297,6 +396,40 @@ impl Game {
             }
         }
         entity_ids
+    }
+
+    pub fn first_building_id_in_bouding_box(
+        &self,
+        top_left: &Vec2f,
+        bottom_right: &Vec2f,
+    ) -> Option<usize> {
+        for building in self.building_container.get_buildings().iter() {
+            let pos = building.get_position();
+            let width = building.get_width();
+            let height = building.get_height();
+
+            if pos.x as f32 >= top_left.x
+                && (pos.x + width) as f32 <= bottom_right.x
+                && pos.y as f32 >= top_left.y
+                && (pos.y + height) as f32 <= bottom_right.y
+            {
+                return Some(building.get_id());
+            }
+        }
+        None
+    }
+
+    pub fn command_building_spawn(&mut self, building_id: usize) {
+        for building in self.building_container.get_buildings().iter() {
+            if building.get_id() == building_id {
+                self.entity_container.spawn_entity(Entity::new_params(
+                    building.get_spawn_position(),
+                    building.get_team(),
+                    0.25,
+                    EntityType::Ranged,
+                ));
+            }
+        }
     }
 
     pub fn command_entities_move(&mut self, entity_ids: &Vec<usize>, goal_pos: &Vec2f) {
@@ -320,7 +453,7 @@ impl Game {
         for entity in self.entity_container.iter_alive() {
             let closest_enemy = self.entity_container.get_closest_entity(
                 &entity.borrow().get_position(),
-                5.0,
+                8.0,
                 None,
                 Some(entity.borrow().get_team()),
             );

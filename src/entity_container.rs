@@ -23,6 +23,10 @@ impl EntityContainer {
         }
     }
 
+    pub fn spawn_entity(&mut self, entity: Entity) {
+        self.entities_rc.push(Rc::new(RefCell::new(entity)));
+    }
+
     // pub fn iter_all(&self) -> std::slice::Iter<Rc<RefCell<Entity>>> {
     //     return self.entities_rc.iter();
     // }

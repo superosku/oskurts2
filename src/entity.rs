@@ -25,6 +25,16 @@ pub struct Entity {
 }
 
 impl Entity {
+    pub fn new_params(position: Vec2f, team: u8, radius: f32, entity_type: EntityType) -> Entity {
+        let mut entity = Entity::new(position);
+
+        entity.team = team;
+        entity.radius = radius;
+        entity.entity_type = entity_type;
+
+        entity
+    }
+
     pub fn new(position: Vec2f) -> Entity {
         let random_id = rand::random::<usize>();
         // Radius should be random between 0.25 and 0.5

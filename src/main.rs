@@ -15,6 +15,8 @@ use winit::{
 };
 use winit_input_helper::WinitInputHelper;
 
+mod building;
+mod building_container;
 mod camera;
 mod constants;
 mod entity;
@@ -65,8 +67,7 @@ fn main() {
     let mut drag_pos: Option<Vec2f> = None;
 
     let mut selected_ids: Vec<usize> = Vec::new();
-
-    let mut mouse_closest_entity_pos: Option<Vec2f> = None;
+    let mut selected_building_id: Option<usize> = None;
 
     let mut draw_time = Duration::from_secs(0);
     let mut game_update_time = Duration::from_secs(0);
@@ -88,7 +89,7 @@ fn main() {
                             dt.clear(SolidSource::from_unpremultiplied_argb(
                                 0xff, 0x00, 0x00, 0x00,
                             ));
-                            game.draw(&mut dt, &camera, &selected_ids);
+                            game.draw(&mut dt, &camera, &selected_ids, &selected_building_id);
 
                             match (&drag_start_pos, &drag_pos) {
                                 (Some(pos1), Some(pos2)) => {
@@ -117,29 +118,6 @@ fn main() {
                                     );
                                 }
                                 _ => {}
-                            }
-
-                            if let Some(asdf) = &mouse_closest_entity_pos {
-                                let mut screen_pos = camera.world_to_screen(&asdf);
-                                let mut path_builder = PathBuilder::new();
-                                path_builder.move_to(screen_pos.x, screen_pos.y);
-                                path_builder.line_to(screen_pos.x + 10.0, screen_pos.y);
-                                path_builder.line_to(screen_pos.x + 10.0, screen_pos.y + 10.0);
-                                path_builder.line_to(screen_pos.x, screen_pos.y + 10.0);
-                                path_builder.close();
-
-                                let path = path_builder.finish();
-
-                                let stroke_style = &mut raqote::StrokeStyle::default();
-                                // stroke_style.width = camera.length_to_pixels(0.1);
-                                dt.fill(
-                                    &path,
-                                    &Source::Solid(SolidSource::from_unpremultiplied_argb(
-                                        0x80, 0xff, 0xff, 0xff,
-                                    )),
-                                    // stroke_style,
-                                    &DrawOptions::new(),
-                                );
                             }
 
                             for (dst, &src) in pixels
@@ -202,7 +180,11 @@ fn main() {
                         cursor.1 / 2.0,
                     ));
 
-                    mouse_closest_entity_pos = game.get_closest_entity_pos(&cursor_game_pos, 10.0);
+                    if input.key_pressed_os(KeyCode::KeyQ) {
+                        if let Some(building_id) = selected_building_id {
+                            game.command_building_spawn(building_id);
+                        }
+                    }
 
                     if input.mouse_pressed(1) {
                         game.command_entities_move(&selected_ids, &cursor_game_pos);
@@ -216,11 +198,17 @@ fn main() {
                     } else {
                         match (&drag_start_pos, &drag_pos) {
                             (Some(p1), Some(p2)) => {
-                                selected_ids = game.entity_ids_in_bounding_box(
-                                    Vec2f::new(p1.x.min(p2.x), p1.y.min(p2.y)),
-                                    Vec2f::new(p1.x.max(p2.x), p1.y.max(p2.y)),
-                                );
+                                let top_left = Vec2f::new(p1.x.min(p2.x), p1.y.min(p2.y));
+                                let bottom_right = Vec2f::new(p1.x.max(p2.x), p1.y.max(p2.y));
+                                selected_ids =
+                                    game.entity_ids_in_bounding_box(&top_left, &bottom_right);
                                 println!("Selected entities: {:?}", selected_ids);
+                                if selected_ids.len() == 0 {
+                                    let building_id = game
+                                        .first_building_id_in_bouding_box(&top_left, &bottom_right);
+                                    println!("Selected building: {:?}", building_id);
+                                    selected_building_id = building_id;
+                                }
                             }
                             _ => {}
                         }
