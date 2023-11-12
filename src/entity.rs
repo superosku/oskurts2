@@ -1,6 +1,6 @@
 use crate::ground::Ground;
 use crate::projectile_handler::ProjectileHandler;
-use crate::vec::Vec2f;
+use crate::vec::{Vec2f, Vec2i};
 use std::cell::RefCell;
 use std::rc::Rc;
 
@@ -9,11 +9,28 @@ pub enum EntityType {
     Ranged,
 }
 
+pub struct Goal {
+    position: Vec2f,
+    group_size: i32,
+}
+
+pub struct GatherGoal {
+    resource_position: Vec2f,
+    building_position: Vec2f,
+    resource_type: u8,
+}
+
+pub enum EntityAction {
+    Move(Goal),
+    Attack(Goal),
+    Idle,
+    Gather(GatherGoal),
+}
+
 pub struct Entity {
     position: Vec2f,
     next_position: Vec2f,
-    goal: Option<Vec2f>,
-    goal_group_size: i32,
+    action: EntityAction,
     speed: f32,
     id: usize,
     radius: f32,
@@ -52,10 +69,9 @@ impl Entity {
             position: position.clone(),
             next_position: position.clone(),
             // goal: Some(Vec2f::new(10.0, 10.0)),
-            goal: None,
+            action: EntityAction::Idle,
             speed: 0.05,
             id: random_id,
-            goal_group_size: 1,
             radius: random_radius,
             team: random_team,
             projectile_cooldown: 0,
@@ -87,17 +103,36 @@ impl Entity {
     }
 
     pub fn set_goal(&mut self, goal: &Vec2f, goal_group_size: i32) {
-        self.goal = Some(goal.clone());
-        self.goal_group_size = goal_group_size;
+        // TODO: Check if should be gather instead
+        // TODO: Allow setting attack action
+        self.action = EntityAction::Move(Goal {
+            position: goal.clone(),
+            group_size: goal_group_size,
+        });
+        // self.goal = Some(goal.clone());
+        // self.goal_group_size = goal_group_size;
+    }
+
+    pub fn get_goal(&self) -> Option<Vec2f> {
+        match self.action {
+            EntityAction::Move(ref goal) => Some(goal.position.clone()),
+            EntityAction::Attack(ref goal) => Some(goal.position.clone()),
+            EntityAction::Gather(ref gather_goal) => {
+                // TODO: Return building position instead of resource position if moving towards
+                // the building
+                Some(gather_goal.resource_position.clone())
+            }
+            _ => None,
+        }
     }
 
     pub fn get_position(&self) -> Vec2f {
         self.position.clone()
     }
-
-    pub fn get_goal(&self) -> Option<Vec2f> {
-        self.goal.clone()
-    }
+    //
+    // pub fn get_goal(&self) -> Option<Vec2f> {
+    //     self.goal.clone()
+    // }
 
     pub fn get_pushed(&mut self, other_position: Vec2f, other_radius: f32) {
         let delta = self.position.clone() - other_position;
@@ -220,57 +255,122 @@ impl Entity {
         }
     }
 
+    // Helper for fn update
+    fn distance_to_goal(&self, goal: &Vec2f) -> f32 {
+        let delta = goal.clone() - self.position.clone();
+        delta.length()
+    }
+
+    // Helper for fn update
+    fn distance_to_block(&self, block: &Vec2i) -> f32 {
+        // Returns a distance to block. For an example (10,10) from (10.5, 10.5) is 0.5
+        // And (10,10) from (10.5, 11.5) is 0.5
+
+        let y_diff = if self.position.y < block.y as f32 {
+            block.y as f32 - self.position.y
+        } else if self.position.y > block.y as f32 + 1.0 {
+            self.position.y - (block.y as f32 + 1.0)
+        } else {
+            0.0
+        };
+
+        let x_diff = if self.position.x < block.x as f32 {
+            block.x as f32 - self.position.x
+        } else if self.position.x > block.x as f32 + 1.0 {
+            self.position.x - (block.x as f32 + 1.0)
+        } else {
+            0.0
+        };
+
+        (x_diff * x_diff + y_diff * y_diff).sqrt()
+    }
+
+    // Helper for fn update
+    fn move_towards_goal(&mut self, goal: &Vec2f) {
+        let delta = goal.clone() - self.position.clone();
+        self.next_position += delta.normalized() * self.speed;
+    }
+
+    // Helper for fn update
+    fn interact_with_closest_enemy(
+        &mut self,
+        closest_enemy: &Rc<RefCell<Entity>>,
+        projectile_handler: &mut ProjectileHandler,
+    ) {
+        let delta = closest_enemy.borrow().position.clone() - self.position.clone();
+        let delta_length = delta.length();
+        let combined_length = self.radius + closest_enemy.borrow().radius;
+
+        let min_range = match self.entity_type {
+            EntityType::Ranged => 5.0,
+            EntityType::Meelee => combined_length + 0.1,
+        };
+
+        if delta_length > min_range {
+            self.next_position += delta.normalized() * self.speed;
+        } else {
+            if self.projectile_cooldown == 0 {
+                match self.entity_type {
+                    EntityType::Ranged => {
+                        projectile_handler.add_ranged_projectile(
+                            self.position.clone(),
+                            closest_enemy.borrow().position.clone(),
+                        );
+                    }
+                    EntityType::Meelee => {
+                        projectile_handler
+                            .add_meelee_projectile(closest_enemy.borrow().position.clone());
+                    }
+                }
+                self.projectile_cooldown = 100;
+            } else {
+                self.projectile_cooldown -= 1;
+            }
+            // TODO: Put down a projectile
+            // TODO: How about cooldown
+        }
+    }
+
     pub fn update(
         &mut self,
         closest_enemy: Option<&Rc<RefCell<Entity>>>,
         projectile_handler: &mut ProjectileHandler,
     ) {
-        match &self.goal {
-            Some(goal) => {
-                let delta = goal.clone() - self.position.clone();
-                let delta_length = delta.length();
-                if delta_length < (1.0 * (self.goal_group_size as f32).sqrt() / 2.0 - 0.9).max(0.1)
-                {
-                    self.goal = None;
-                } else {
-                    self.next_position += delta.normalized() * self.speed;
+        match &self.action {
+            EntityAction::Idle => {
+                if let Some(closest_enemy) = closest_enemy {
+                    self.interact_with_closest_enemy(closest_enemy, projectile_handler);
                 }
             }
-            None => {
-                if let Some(closest_enemy) = closest_enemy {
-                    let delta = closest_enemy.borrow().position.clone() - self.position.clone();
-                    let delta_length = delta.length();
-                    let combined_length = self.radius + closest_enemy.borrow().radius;
-
-                    let min_range = match self.entity_type {
-                        EntityType::Ranged => 5.0,
-                        EntityType::Meelee => combined_length + 0.1,
-                    };
-
-                    if delta_length > min_range {
-                        self.next_position += delta.normalized() * self.speed;
+            EntityAction::Move(goal) => {
+                if self.distance_to_goal(&goal.position)
+                    < 1.0 * (goal.group_size as f32).sqrt() / 2.0
+                {
+                    self.action = EntityAction::Idle;
+                } else {
+                    self.move_towards_goal(&goal.position.clone());
+                }
+            }
+            EntityAction::Attack(goal) => {
+                if self.distance_to_goal(&goal.position)
+                    < 1.0 * (goal.group_size as f32).sqrt() / 2.0
+                {
+                    self.action = EntityAction::Idle;
+                } else {
+                    if let Some(closest_enemy) = closest_enemy {
+                        self.interact_with_closest_enemy(closest_enemy, projectile_handler);
                     } else {
-                        if self.projectile_cooldown == 0 {
-                            match self.entity_type {
-                                EntityType::Ranged => {
-                                    projectile_handler.add_ranged_projectile(
-                                        self.position.clone(),
-                                        closest_enemy.borrow().position.clone(),
-                                    );
-                                }
-                                EntityType::Meelee => {
-                                    projectile_handler.add_meelee_projectile(
-                                        closest_enemy.borrow().position.clone(),
-                                    );
-                                }
-                            }
-                            self.projectile_cooldown = 100;
-                        } else {
-                            self.projectile_cooldown -= 1;
-                        }
-                        // TODO: Put down a projectile
-                        // TODO: How about cooldown
+                        self.move_towards_goal(&goal.position.clone());
                     }
+                }
+            }
+            EntityAction::Gather(goal) => {
+                if self.distance_to_block(&goal.resource_position.as_vec2i()) < self.radius + 0.1 {
+                    self.action = EntityAction::Idle;
+                    // TODO: Do not set action to idle here but instead start gathering resources
+                    // TODO: And when done flip a switch to go back to the building etc..
+                } else {
+                    self.move_towards_goal(&goal.resource_position.clone());
                 }
             }
         }

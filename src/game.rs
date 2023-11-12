@@ -443,14 +443,14 @@ impl Game {
         bottom_right: &Vec2f,
     ) -> Option<usize> {
         for building in self.building_container.get_buildings().iter() {
-            let pos = building.get_position();
-            let width = building.get_width();
-            let height = building.get_height();
+            let pos = building.get_position().as_vec2f();
+            let width = building.get_width() as f32;
+            let height = building.get_height() as f32;
 
-            if pos.x as f32 >= top_left.x
-                && (pos.x + width) as f32 <= bottom_right.x
-                && pos.y as f32 >= top_left.y
-                && (pos.y + height) as f32 <= bottom_right.y
+            if bottom_right.x > pos.x
+                && bottom_right.y > pos.y
+                && top_left.x < pos.x + width
+                && top_left.y < pos.y + height
             {
                 return Some(building.get_id());
             }

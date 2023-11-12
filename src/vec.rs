@@ -22,6 +22,10 @@ impl Vec2f {
         }
         Vec2f::new(self.x / length, self.y / length)
     }
+
+    pub fn as_vec2i(&self) -> Vec2i {
+        Vec2i::new(self.x as i32, self.y as i32)
+    }
 }
 
 impl ops::Add for Vec2f {
@@ -100,6 +104,10 @@ impl Vec2i {
     //     }
     //     Vec2i::new(self.x / length, self.y / length)
     // }
+
+    pub fn as_vec2f(&self) -> Vec2f {
+        Vec2f::new(self.x as f32, self.y as f32)
+    }
 }
 
 impl ops::Add for Vec2i {
