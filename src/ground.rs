@@ -7,6 +7,7 @@ use crate::vec::Vec2f;
 pub enum GroundType {
     Empty,
     Wall,
+    Gold,
 }
 
 pub struct Ground {
@@ -24,10 +25,12 @@ impl Ground {
             // Random change of being a wall
             if rand::random::<f32>() < 0.1 {
                 tiles.push(GroundType::Wall);
+            } else if rand::random::<f32>() < 0.02 {
+                tiles.push(GroundType::Gold);
             } else {
                 tiles.push(GroundType::Empty);
             }
-            tiles.push(GroundType::Empty);
+            // tiles.push(GroundType::Empty);
         }
         let mut ground = Ground {
             tiles,
@@ -76,16 +79,13 @@ impl Ground {
     }
 
     pub fn is_blocked(&self, pos: &Vec2f) -> bool {
-        match self.get_pos(pos) {
-            GroundType::Empty => false,
-            GroundType::Wall => true,
-        }
+        self.blocked_at(pos.x as i32, pos.y as i32)
     }
 
     pub fn blocked_at(&self, x: i32, y: i32) -> bool {
         match self.get_at(x, y) {
             GroundType::Empty => false,
-            GroundType::Wall => true,
+            GroundType::Wall | GroundType::Gold => true,
         }
     }
 

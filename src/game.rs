@@ -323,11 +323,13 @@ impl Game {
     fn draw_ground(&self, dt: &mut DrawTarget, camera: &Camera) {
         let mut ground_path_builder = PathBuilder::new();
         let mut wall_path_builder = PathBuilder::new();
+        let mut gold_path_builder = PathBuilder::new();
 
         for x in 0..self.ground.get_width() {
             for y in 0..self.ground.get_height() {
-                match self.ground.get_at(x, y) {
-                    GroundType::Empty => {
+                let ground_type = self.ground.get_at(x, y);
+                match ground_type {
+                    GroundType::Empty | GroundType::Gold => {
                         let draw_pos = camera.world_to_screen(&Vec2f::new(x as f32, y as f32));
                         ground_path_builder.move_to(draw_pos.x, draw_pos.y);
                         ground_path_builder
@@ -354,6 +356,35 @@ impl Game {
                         wall_path_builder.close();
                     }
                 }
+                match ground_type {
+                    GroundType::Gold => {
+                        for (xx, yy) in [
+                            // (0.15, 0.0),
+                            // (0.85, 0.0),
+                            // (0.15, 0.7),
+                            // (0.85, 0.7),
+                            (0.15 + 0.2, 0.0 + 0.1),
+                            (0.85 - 0.1, 0.0 + 0.2),
+                            (0.15 + 0.2, 0.7 - 0.3),
+                            (0.85 - 0.2, 0.7 - 0.1),
+                        ] {
+                            let draw_pos =
+                                camera.world_to_screen(&Vec2f::new(x as f32 + xx, y as f32 + yy));
+                            gold_path_builder.move_to(draw_pos.x, draw_pos.y);
+                            gold_path_builder.line_to(
+                                draw_pos.x + camera.length_to_pixels(0.15),
+                                draw_pos.y + camera.length_to_pixels(0.3),
+                            );
+                            gold_path_builder.line_to(
+                                draw_pos.x - camera.length_to_pixels(0.15),
+                                draw_pos.y + camera.length_to_pixels(0.3),
+                            );
+                            // gold_path_builder.line_to(draw_pos.x, draw_pos.y + camera.length_to_pixels(1.0));
+                            gold_path_builder.close();
+                        }
+                    }
+                    _ => {}
+                }
             }
         }
 
@@ -365,9 +396,17 @@ impl Game {
         let ground_source = Source::Solid(SolidSource::from_unpremultiplied_argb(
             255, 0x48, 0x40, 0x41,
         ));
+        let gold_source = Source::Solid(SolidSource::from_unpremultiplied_argb(
+            255, 0xff, 0xd7, 0x00,
+        ));
 
         dt.fill(&ground_path, &ground_source, &DrawOptions::new());
         dt.fill(&wall_path, &wall_source, &DrawOptions::new());
+        dt.fill(
+            &gold_path_builder.finish(),
+            &gold_source,
+            &DrawOptions::new(),
+        );
     }
 
     pub fn draw(
