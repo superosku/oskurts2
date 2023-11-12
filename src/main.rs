@@ -187,7 +187,11 @@ fn main() {
                     }
 
                     if input.mouse_pressed(1) {
-                        game.command_entities_move(&selected_ids, &cursor_game_pos);
+                        game.command_entities_move(
+                            &selected_ids,
+                            &cursor_game_pos,
+                            input.key_held(KeyCode::KeyE),
+                        );
                     }
                     if input.mouse_pressed(0) {
                         drag_start_pos = Some(cursor_game_pos.clone());
@@ -198,6 +202,8 @@ fn main() {
                     } else {
                         match (&drag_start_pos, &drag_pos) {
                             (Some(p1), Some(p2)) => {
+                                selected_building_id = None;
+
                                 let top_left = Vec2f::new(p1.x.min(p2.x), p1.y.min(p2.y));
                                 let bottom_right = Vec2f::new(p1.x.max(p2.x), p1.y.max(p2.y));
                                 selected_ids =

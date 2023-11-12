@@ -471,15 +471,36 @@ impl Game {
         }
     }
 
-    pub fn command_entities_move(&mut self, entity_ids: &Vec<usize>, goal_pos: &Vec2f) {
+    pub fn command_entities_move(
+        &mut self,
+        entity_ids: &Vec<usize>,
+        goal_pos: &Vec2f,
+        is_attack_command: bool,
+    ) {
+        // TODO: Define if is gather from map position clicked
+
         // let mut goals = self.ground.generate_goals(goal_pos, entity_ids.len() as i32);
+
+        let is_gather_command = match self.ground.get_pos(goal_pos) {
+            GroundType::Gold => true,
+            _ => false,
+        };
+
         for entity in self.entity_container.iter_alive() {
             if entity_ids.contains(&entity.borrow().get_id()) {
-                // let goal = goals.pop().unwrap();
-                // entity.set_goal(&goal_pos);
-                entity
-                    .borrow_mut()
-                    .set_goal(&goal_pos, entity_ids.len() as i32);
+                if is_gather_command {
+                    entity
+                        .borrow_mut()
+                        .set_action_gather(&goal_pos, &Vec2f::new(5.0, 5.0), 0);
+                } else if is_attack_command {
+                    entity
+                        .borrow_mut()
+                        .set_action_attack(&goal_pos, entity_ids.len() as i32);
+                } else {
+                    entity
+                        .borrow_mut()
+                        .set_action_move(&goal_pos, entity_ids.len() as i32);
+                }
             }
         }
     }

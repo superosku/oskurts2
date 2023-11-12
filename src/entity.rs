@@ -9,17 +9,22 @@ pub enum EntityType {
     Ranged,
 }
 
+#[derive(Clone)]
 pub struct Goal {
     position: Vec2f,
     group_size: i32,
 }
 
+#[derive(Clone)]
 pub struct GatherGoal {
     resource_position: Vec2f,
     building_position: Vec2f,
     resource_type: u8,
+    going_towards_resource: bool,
+    counter: i32,
 }
 
+#[derive(Clone)]
 pub enum EntityAction {
     Move(Goal),
     Attack(Goal),
@@ -102,15 +107,36 @@ impl Entity {
         self.id
     }
 
-    pub fn set_goal(&mut self, goal: &Vec2f, goal_group_size: i32) {
-        // TODO: Check if should be gather instead
-        // TODO: Allow setting attack action
+    pub fn set_action_move(&mut self, goal: &Vec2f, goal_group_size: i32) {
+        println!("Setting action move");
         self.action = EntityAction::Move(Goal {
             position: goal.clone(),
             group_size: goal_group_size,
         });
-        // self.goal = Some(goal.clone());
-        // self.goal_group_size = goal_group_size;
+    }
+
+    pub fn set_action_attack(&mut self, goal: &Vec2f, goal_group_size: i32) {
+        println!("Setting action attack");
+        self.action = EntityAction::Attack(Goal {
+            position: goal.clone(),
+            group_size: goal_group_size,
+        });
+    }
+
+    pub fn set_action_gather(
+        &mut self,
+        resource_position: &Vec2f,
+        building_position: &Vec2f,
+        resource_type: u8,
+    ) {
+        println!("Setting action gather");
+        self.action = EntityAction::Gather(GatherGoal {
+            resource_position: resource_position.clone(),
+            building_position: building_position.clone(),
+            resource_type: resource_type,
+            going_towards_resource: true,
+            counter: 0,
+        });
     }
 
     pub fn get_goal(&self) -> Option<Vec2f> {
@@ -118,9 +144,10 @@ impl Entity {
             EntityAction::Move(ref goal) => Some(goal.position.clone()),
             EntityAction::Attack(ref goal) => Some(goal.position.clone()),
             EntityAction::Gather(ref gather_goal) => {
-                // TODO: Return building position instead of resource position if moving towards
-                // the building
-                Some(gather_goal.resource_position.clone())
+                if gather_goal.going_towards_resource {
+                    return Some(gather_goal.resource_position.clone());
+                }
+                return Some(gather_goal.building_position.clone());
             }
             _ => None,
         }
@@ -336,7 +363,10 @@ impl Entity {
         closest_enemy: Option<&Rc<RefCell<Entity>>>,
         projectile_handler: &mut ProjectileHandler,
     ) {
-        match &self.action {
+        // TODO: This is a hack against multiple mutable borrows
+        let mut cloned_action = self.action.clone();
+
+        match &mut cloned_action {
             EntityAction::Idle => {
                 if let Some(closest_enemy) = closest_enemy {
                     self.interact_with_closest_enemy(closest_enemy, projectile_handler);
@@ -346,7 +376,8 @@ impl Entity {
                 if self.distance_to_goal(&goal.position)
                     < 1.0 * (goal.group_size as f32).sqrt() / 2.0
                 {
-                    self.action = EntityAction::Idle;
+                    cloned_action = EntityAction::Idle;
+                    // self.action = EntityAction::Idle;
                 } else {
                     self.move_towards_goal(&goal.position.clone());
                 }
@@ -355,7 +386,8 @@ impl Entity {
                 if self.distance_to_goal(&goal.position)
                     < 1.0 * (goal.group_size as f32).sqrt() / 2.0
                 {
-                    self.action = EntityAction::Idle;
+                    cloned_action = EntityAction::Idle;
+                    // self.action = EntityAction::Idle;
                 } else {
                     if let Some(closest_enemy) = closest_enemy {
                         self.interact_with_closest_enemy(closest_enemy, projectile_handler);
@@ -365,14 +397,32 @@ impl Entity {
                 }
             }
             EntityAction::Gather(goal) => {
-                if self.distance_to_block(&goal.resource_position.as_vec2i()) < self.radius + 0.1 {
-                    self.action = EntityAction::Idle;
-                    // TODO: Do not set action to idle here but instead start gathering resources
-                    // TODO: And when done flip a switch to go back to the building etc..
+                if goal.going_towards_resource {
+                    if self.distance_to_block(&goal.resource_position.as_vec2i())
+                        < self.radius + 0.1
+                    {
+                        goal.counter += 1;
+                        if goal.counter > 100 {
+                            goal.counter = 0;
+                            goal.going_towards_resource = false;
+                        }
+                    } else {
+                        self.move_towards_goal(&goal.resource_position.clone());
+                    }
                 } else {
-                    self.move_towards_goal(&goal.resource_position.clone());
+                    if self.distance_to_block(&goal.building_position.as_vec2i())
+                        < self.radius + 0.1
+                    {
+                        // TODO: This is a dropoff point
+                        goal.counter = 0;
+                        goal.going_towards_resource = true;
+                    } else {
+                        self.move_towards_goal(&goal.building_position.clone());
+                    }
                 }
             }
         }
+
+        self.action = cloned_action;
     }
 }
