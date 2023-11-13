@@ -18,7 +18,7 @@ pub struct Game {
     building_container: BuildingContainer,
     ground: Ground,
     projectile_handler: ProjectileHandler,
-    debug_path: Option<Rc<RefCell<Path>>>,
+    pub debug_path: Option<Rc<RefCell<Path>>>,
 }
 
 impl Game {
@@ -428,32 +428,39 @@ impl Game {
                     path_item.1 as f32 + 0.5,
                 ));
 
-                path_builder.move_to(center_pos.x, center_pos.y);
+                path_builder.move_to(
+                    // center_pos.x,
+                    // center_pos.y
+                    center_pos.x - camera.length_to_pixels(direction.x * 0.2),
+                    center_pos.y - camera.length_to_pixels(direction.y * 0.2),
+                );
                 path_builder.line_to(
-                    center_pos.x + camera.length_to_pixels(direction.x * 0.5),
-                    center_pos.y + camera.length_to_pixels(direction.y * 0.5),
+                    center_pos.x + camera.length_to_pixels(direction.x * 0.2),
+                    center_pos.y + camera.length_to_pixels(direction.y * 0.2),
                 );
                 path_builder.line_to(
                     center_pos.x
-                        + camera.length_to_pixels(direction.x * 0.5)
-                        + camera.length_to_pixels(direction.y * 0.2)
-                        - camera.length_to_pixels(direction.x * 0.2),
+                        + camera.length_to_pixels(
+                            direction.x * 0.2 + direction.y * 0.1 - direction.x * 0.1,
+                        ),
                     center_pos.y
-                        + camera.length_to_pixels(direction.y * 0.5)
-                        + camera.length_to_pixels(direction.x * 0.2)
-                        - camera.length_to_pixels(direction.y * 0.2),
+                        + camera.length_to_pixels(
+                            direction.y * 0.2 + direction.x * 0.1 - direction.y * 0.1,
+                        ),
                 );
                 path_builder.move_to(
-                    center_pos.x + camera.length_to_pixels(direction.x * 0.5),
-                    center_pos.y + camera.length_to_pixels(direction.y * 0.5),
+                    center_pos.x + camera.length_to_pixels(direction.x * 0.2),
+                    center_pos.y + camera.length_to_pixels(direction.y * 0.2),
                 );
                 path_builder.line_to(
-                    center_pos.x + camera.length_to_pixels(direction.x * 0.5)
-                        - camera.length_to_pixels(direction.y * 0.2)
-                        - camera.length_to_pixels(direction.x * 0.2),
-                    center_pos.y + camera.length_to_pixels(direction.y * 0.5)
-                        - camera.length_to_pixels(direction.x * 0.2)
-                        - camera.length_to_pixels(direction.y * 0.2),
+                    center_pos.x
+                        + camera.length_to_pixels(
+                            direction.x * 0.2 - direction.y * 0.1 - direction.x * 0.1,
+                        ),
+                    center_pos.y
+                        + camera.length_to_pixels(
+                            direction.y * 0.2 - direction.x * 0.1 - direction.y * 0.1,
+                        ),
                 );
             }
 

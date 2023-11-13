@@ -10,17 +10,184 @@ pub struct Path {
     pub position_datas: HashMap<PathItem, Vec2f>,
 }
 
+fn get_dirs(direction: &Vec2f) -> (i32, i32) {
+    let dir_y = if direction.y > 0.0 {
+        1
+    } else if direction.y == 0.0 {
+        0
+    } else {
+        -1
+    };
+    let dir_x = if direction.x > 0.0 {
+        1
+    } else if direction.x == 0.0 {
+        0
+    } else {
+        -1
+    };
+    (dir_x, dir_y)
+}
+
+fn get_two_lines_intersection(
+    start_pos: &Vec2f,
+    line_1_start: &Vec2f,
+    line_1_direction: &Vec2f, // Normal vector of the line from start
+    line_2_start: &Vec2f,
+    line_2_direction: &Vec2f, // Normal vector of the line from start
+) -> Vec2f {
+    if line_1_direction.x == line_2_direction.x && line_1_direction.y == line_2_direction.y {
+        return line_1_direction.clone();
+    }
+
+    let line_1_end = line_1_start + line_1_direction;
+    let line_2_end = line_2_start + line_2_direction;
+
+    let towards = if line_1_end.x - line_1_start.x == 0.0 {
+        let line_2_slope = (line_2_end.y - line_2_start.y) / (line_2_end.x - line_2_start.x);
+        let line_2_intercept = line_2_start.y - line_2_slope * line_2_start.x;
+        let x = line_1_start.x;
+        let y = line_2_slope * x + line_2_intercept;
+        Vec2f::new(x, y)
+    } else if (line_2_end.x - line_2_start.x) == 0.0 {
+        let line_1_slope = (line_1_end.y - line_1_start.y) / (line_1_end.x - line_1_start.x);
+        let line_1_intercept = line_1_start.y - line_1_slope * line_1_start.x;
+        let x = line_2_start.x;
+        let y = line_1_slope * x + line_1_intercept;
+        Vec2f::new(x, y)
+    } else {
+        let line_1_slope = (line_1_end.y - line_1_start.y) / (line_1_end.x - line_1_start.x);
+        let line_2_slope = (line_2_end.y - line_2_start.y) / (line_2_end.x - line_2_start.x);
+
+        let line_1_intercept = line_1_start.y - line_1_slope * line_1_start.x;
+        let line_2_intercept = line_2_start.y - line_2_slope * line_2_start.x;
+
+        let x = (line_2_intercept - line_1_intercept) / (line_1_slope - line_2_slope);
+        let y = line_1_slope * x + line_1_intercept;
+        Vec2f::new(x, y)
+    };
+
+    (towards - start_pos.clone()).normalized()
+    // Vec2f::new(0.0, 0.0);
+}
+
 impl Path {
     pub fn new(position_datas: HashMap<PathItem, Vec2f>) -> Path {
         Path { position_datas }
     }
 
-    pub fn get_position_data(&self, position: Vec2i) -> Option<&Vec2f> {
-        self.position_datas.get(&(position.x, position.y))
-    }
+    pub fn do_orienting_round(&mut self) {
+        let mut new_position_datas: HashMap<PathItem, Vec2f> = HashMap::new();
+        println!("Orienting round");
 
-    pub fn set_position_data(&mut self, position: Vec2i, data: Vec2f) {
-        self.position_datas.insert((position.x, position.y), data);
+        for (path_item, direction) in &self.position_datas {
+            let (dir_x, dir_y) = get_dirs(direction);
+
+            // let mut neighbours: Vec<Vec2f>= Vec::new();
+            let mut new_direction: Option<Vec2f> = None;
+
+            match (dir_x, dir_y) {
+                (0, 0) => {
+                    println!("I do not think this should be possible :/");
+                }
+                (1, 1) | (1, -1) | (-1, 1) | (-1, -1) => {
+                    let other_1 = self
+                        .position_datas
+                        .get(&(path_item.0 + dir_x, path_item.1 + 0));
+                    let other_2 = self
+                        .position_datas
+                        .get(&(path_item.0 + 0, path_item.1 + dir_y));
+                    let other_3 = self
+                        .position_datas
+                        .get(&(path_item.0 + dir_x, path_item.1 + dir_y));
+
+                    match (other_1, other_2, other_3) {
+                        (Some(other_1), Some(other_2), Some(other_3)) => {
+                            new_direction = Some(get_two_lines_intersection(
+                                &Vec2f::new(path_item.0 as f32, path_item.1 as f32),
+                                &Vec2f::new((path_item.0 + dir_x) as f32, (path_item.1 + 0) as f32),
+                                other_1,
+                                &Vec2f::new((path_item.0 + 0) as f32, (path_item.1 + dir_y) as f32),
+                                other_2,
+                            ));
+                        }
+                        _ => {}
+                    }
+                }
+                (0, 1) | (1, 0) | (-1, 0) | (0, -1) => {
+                    let other = self
+                        .position_datas
+                        .get(&(path_item.0 + dir_x, path_item.1 + dir_y));
+                    if let Some(other) = other {
+                        let (other_dir_x, other_dir_y) = get_dirs(other);
+
+                        if dir_x == 0 {
+                            // other_dir_x is meaningful
+                            let other_2 = self
+                                .position_datas
+                                .get(&(path_item.0 + other_dir_x, path_item.1 + 0));
+                            let other_3 = self
+                                .position_datas
+                                .get(&(path_item.0 + other_dir_x, path_item.1 + dir_y));
+                            match (other_2, other_3) {
+                                (Some(other_2), Some(other_3)) => {
+                                    new_direction = Some(get_two_lines_intersection(
+                                        &Vec2f::new(path_item.0 as f32, path_item.1 as f32),
+                                        &Vec2f::new(
+                                            (path_item.0 + dir_x) as f32,
+                                            (path_item.1 + dir_y) as f32,
+                                        ),
+                                        other,
+                                        &Vec2f::new(
+                                            (path_item.0 + other_dir_x) as f32,
+                                            (path_item.1 + 0) as f32,
+                                        ),
+                                        other_2,
+                                    ));
+                                }
+                                _ => {}
+                            }
+                        } else {
+                            // other_dir_y is meaningful
+                            let other_2 = self
+                                .position_datas
+                                .get(&(path_item.0 + 0, path_item.1 + other_dir_y));
+                            let other_3 = self
+                                .position_datas
+                                .get(&(path_item.0 + dir_x, path_item.1 + other_dir_y));
+                            match (other_2, other_3) {
+                                (Some(other_2), Some(other_3)) => {
+                                    new_direction = Some(get_two_lines_intersection(
+                                        &Vec2f::new(path_item.0 as f32, path_item.1 as f32),
+                                        &Vec2f::new(
+                                            (path_item.0 + dir_x) as f32,
+                                            (path_item.1 + dir_y) as f32,
+                                        ),
+                                        other,
+                                        &Vec2f::new(
+                                            (path_item.0 + 0) as f32,
+                                            (path_item.1 + other_dir_y) as f32,
+                                        ),
+                                        other_2,
+                                    ));
+                                }
+                                _ => {}
+                            }
+                        }
+                    }
+                }
+                _ => {
+                    println!("This definitely should not be possible");
+                }
+            }
+
+            if let Some(new_direction) = new_direction {
+                new_position_datas.insert(*path_item, new_direction);
+            } else {
+                new_position_datas.insert(*path_item, direction.clone());
+            }
+        }
+
+        self.position_datas = new_position_datas;
     }
 }
 
@@ -41,7 +208,6 @@ impl PathFinder {
         goal_height: i32,
         start_positions: Vec<Vec2i>,
     ) -> Option<Rc<RefCell<Path>>> {
-        // let mut path_list: Vec<(PathItem, PathItem)> = Vec::new();
         let mut path_items: HashMap<PathItem, Vec2f> = HashMap::new();
         let mut unhandled_positions: Vec<PathItem> = Vec::new();
 

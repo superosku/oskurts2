@@ -169,6 +169,12 @@ fn main() {
                     camera.move_position(&Vec2f::new(0.0, 1.0));
                 }
 
+                if input.key_pressed(KeyCode::KeyU) {
+                    if let Some(debug_path) = &game.debug_path {
+                        debug_path.borrow_mut().do_orienting_round();
+                    }
+                }
+
                 let scroll_diff = input.scroll_diff();
                 if scroll_diff.1 != 0.0 {
                     camera.zoom(1.0 + scroll_diff.1 / 100.0);
