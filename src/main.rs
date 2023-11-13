@@ -24,6 +24,7 @@ mod entity_container;
 mod game;
 mod game_thing;
 mod ground;
+mod path_finder;
 mod projectile;
 mod projectile_handler;
 mod vec;

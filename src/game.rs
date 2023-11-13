@@ -5,16 +5,20 @@ use crate::constants::{ENTITY_AMOUNT, GROUND_HEIGHT, GROUND_WIDTH};
 use crate::entity::{Entity, EntityType};
 use crate::entity_container::EntityContainer;
 use crate::ground::{Ground, GroundType};
+use crate::path_finder::{Path, PathFinder};
 use crate::projectile_handler::ProjectileHandler;
 use crate::vec::{Vec2f, Vec2i};
 use rand::Rng;
 use raqote::{DrawOptions, DrawTarget, PathBuilder, SolidSource, Source};
+use std::cell::RefCell;
+use std::rc::Rc;
 
 pub struct Game {
     entity_container: EntityContainer,
     building_container: BuildingContainer,
     ground: Ground,
     projectile_handler: ProjectileHandler,
+    debug_path: Option<Rc<RefCell<Path>>>,
 }
 
 impl Game {
@@ -39,11 +43,16 @@ impl Game {
             &mut ground,
         );
 
+        let mut path_finder = PathFinder::new();
+        let debug_path =
+            path_finder.find_path(&ground, Vec2i::new(2, 2), 3, 3, vec![Vec2i::new(10, 10)]);
+
         Game {
             entity_container,
             building_container,
             ground,
             projectile_handler: ProjectileHandler::new(),
+            debug_path,
         }
     }
 
@@ -409,6 +418,54 @@ impl Game {
         );
     }
 
+    pub fn draw_debug_path(&self, dt: &mut DrawTarget, camera: &Camera) {
+        if let Some(debug_path) = &self.debug_path {
+            let mut path_builder = PathBuilder::new();
+
+            for (path_item, direction) in debug_path.borrow().position_datas.iter() {
+                let center_pos = camera.world_to_screen(&Vec2f::new(
+                    path_item.0 as f32 + 0.5,
+                    path_item.1 as f32 + 0.5,
+                ));
+
+                path_builder.move_to(center_pos.x, center_pos.y);
+                path_builder.line_to(
+                    center_pos.x + camera.length_to_pixels(direction.x * 0.5),
+                    center_pos.y + camera.length_to_pixels(direction.y * 0.5),
+                );
+                path_builder.line_to(
+                    center_pos.x
+                        + camera.length_to_pixels(direction.x * 0.5)
+                        + camera.length_to_pixels(direction.y * 0.2)
+                        - camera.length_to_pixels(direction.x * 0.2),
+                    center_pos.y
+                        + camera.length_to_pixels(direction.y * 0.5)
+                        + camera.length_to_pixels(direction.x * 0.2)
+                        - camera.length_to_pixels(direction.y * 0.2),
+                );
+                path_builder.move_to(
+                    center_pos.x + camera.length_to_pixels(direction.x * 0.5),
+                    center_pos.y + camera.length_to_pixels(direction.y * 0.5),
+                );
+                path_builder.line_to(
+                    center_pos.x + camera.length_to_pixels(direction.x * 0.5)
+                        - camera.length_to_pixels(direction.y * 0.2)
+                        - camera.length_to_pixels(direction.x * 0.2),
+                    center_pos.y + camera.length_to_pixels(direction.y * 0.5)
+                        - camera.length_to_pixels(direction.x * 0.2)
+                        - camera.length_to_pixels(direction.y * 0.2),
+                );
+            }
+
+            let path = path_builder.finish();
+            let source = Source::Solid(SolidSource::from_unpremultiplied_argb(
+                255, 0x00, 0x00, 0x00,
+            ));
+            let stroke_style = &mut raqote::StrokeStyle::default();
+            dt.stroke(&path, &source, &stroke_style, &DrawOptions::new());
+        }
+    }
+
     pub fn draw(
         &self,
         dt: &mut DrawTarget,
@@ -420,6 +477,7 @@ impl Game {
         self.draw_entities(dt, camera, selected_entiy_ids);
         self.draw_buildings(dt, camera, selected_building_id);
         self.draw_projectiles(dt, camera);
+        self.draw_debug_path(dt, camera);
     }
 
     pub fn entity_ids_in_bounding_box(&self, top_left: &Vec2f, bottom_right: &Vec2f) -> Vec<usize> {

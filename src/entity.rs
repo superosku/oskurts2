@@ -403,6 +403,7 @@ impl Entity {
                     {
                         goal.counter += 1;
                         if goal.counter > 100 {
+                            // TODO: Decrement resource here
                             goal.counter = 0;
                             goal.going_towards_resource = false;
                         }
@@ -414,6 +415,7 @@ impl Entity {
                         < self.radius + 0.1
                     {
                         // TODO: This is a dropoff point
+                        // TODO: Increment resource here
                         goal.counter = 0;
                         goal.going_towards_resource = true;
                     } else {
