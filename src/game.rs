@@ -12,6 +12,7 @@ use rand::Rng;
 use raqote::{DrawOptions, DrawTarget, PathBuilder, SolidSource, Source};
 use std::cell::RefCell;
 use std::rc::Rc;
+use std::time::Instant;
 
 pub struct Game {
     entity_container: EntityContainer,
@@ -43,9 +44,20 @@ impl Game {
             &mut ground,
         );
 
+        let start_time = Instant::now();
+
         let mut path_finder = PathFinder::new();
         let debug_path =
             path_finder.find_path(&ground, Vec2i::new(2, 2), 3, 3, vec![Vec2i::new(10, 10)]);
+        if let Some(path) = &debug_path {
+            for _ in 0..4 {
+                path.borrow_mut().do_orienting_round();
+            }
+        }
+
+        let total_time = start_time.elapsed().as_millis();
+
+        println!("Time to find path: {}ms", total_time);
 
         Game {
             entity_container,
@@ -429,8 +441,6 @@ impl Game {
                 ));
 
                 path_builder.move_to(
-                    // center_pos.x,
-                    // center_pos.y
                     center_pos.x - camera.length_to_pixels(direction.x * 0.2),
                     center_pos.y - camera.length_to_pixels(direction.y * 0.2),
                 );
@@ -445,7 +455,7 @@ impl Game {
                         ),
                     center_pos.y
                         + camera.length_to_pixels(
-                            direction.y * 0.2 + direction.x * 0.1 - direction.y * 0.1,
+                            direction.y * 0.2 - direction.x * 0.1 - direction.y * 0.1,
                         ),
                 );
                 path_builder.move_to(
@@ -459,7 +469,7 @@ impl Game {
                         ),
                     center_pos.y
                         + camera.length_to_pixels(
-                            direction.y * 0.2 - direction.x * 0.1 - direction.y * 0.1,
+                            direction.y * 0.2 + direction.x * 0.1 - direction.y * 0.1,
                         ),
                 );
             }
@@ -583,9 +593,11 @@ impl Game {
                 Some(entity.borrow().get_team()),
             );
 
-            entity
-                .borrow_mut()
-                .update(closest_enemy, &mut self.projectile_handler);
+            entity.borrow_mut().update(
+                closest_enemy,
+                &mut self.projectile_handler,
+                &self.debug_path,
+            );
         }
 
         // Entities push each other

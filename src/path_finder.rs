@@ -28,6 +28,22 @@ fn get_dirs(direction: &Vec2f) -> (i32, i32) {
     (dir_x, dir_y)
 }
 
+fn two_directions_converge(
+    line_1_start: &Vec2f,
+    line_1_direction: &Vec2f, // Normal vector of the line from start
+    line_2_start: &Vec2f,
+    line_2_direction: &Vec2f, // Normal vector of the line from start
+) -> bool {
+    let thing1 = (line_1_start.clone() - line_2_start.clone()).length();
+
+    let line_1_end = line_1_start.clone() + line_1_direction.clone() * 0.1;
+    let line_2_end = line_2_start.clone() + line_2_direction.clone() * 0.1;
+
+    let thing2 = (line_1_end.clone() - line_2_end.clone()).length();
+
+    return thing1 > thing2;
+}
+
 fn get_two_lines_intersection(
     start_pos: &Vec2f,
     line_1_start: &Vec2f,
@@ -67,12 +83,19 @@ fn get_two_lines_intersection(
     };
 
     (towards - start_pos.clone()).normalized()
-    // Vec2f::new(0.0, 0.0);
 }
 
 impl Path {
     pub fn new(position_datas: HashMap<PathItem, Vec2f>) -> Path {
         Path { position_datas }
+    }
+
+    pub fn get_direction(&self, position: &Vec2i) -> Option<Vec2f> {
+        let position = (position.x, position.y);
+        match self.position_datas.get(&position) {
+            Some(direction) => Some(direction.clone()),
+            None => None,
+        }
     }
 
     pub fn do_orienting_round(&mut self) {
@@ -90,25 +113,55 @@ impl Path {
                     println!("I do not think this should be possible :/");
                 }
                 (1, 1) | (1, -1) | (-1, 1) | (-1, -1) => {
-                    let other_1 = self
-                        .position_datas
-                        .get(&(path_item.0 + dir_x, path_item.1 + 0));
-                    let other_2 = self
-                        .position_datas
-                        .get(&(path_item.0 + 0, path_item.1 + dir_y));
-                    let other_3 = self
-                        .position_datas
-                        .get(&(path_item.0 + dir_x, path_item.1 + dir_y));
+                    let pos_1 = (path_item.0 + dir_x, path_item.1 + 0);
+                    let other_1 = self.position_datas.get(&pos_1);
+                    let pos_2 = (path_item.0 + 0, path_item.1 + dir_y);
+                    let other_2 = self.position_datas.get(&pos_2);
+                    let pos_3 = (path_item.0 + dir_x, path_item.1 + dir_y);
+                    let other_3 = self.position_datas.get(&pos_3);
 
                     match (other_1, other_2, other_3) {
                         (Some(other_1), Some(other_2), Some(other_3)) => {
-                            new_direction = Some(get_two_lines_intersection(
-                                &Vec2f::new(path_item.0 as f32, path_item.1 as f32),
-                                &Vec2f::new((path_item.0 + dir_x) as f32, (path_item.1 + 0) as f32),
+                            if two_directions_converge(
+                                &Vec2f::new(pos_1.0 as f32, pos_1.1 as f32),
                                 other_1,
-                                &Vec2f::new((path_item.0 + 0) as f32, (path_item.1 + dir_y) as f32),
+                                &Vec2f::new(pos_2.0 as f32, pos_2.1 as f32),
                                 other_2,
-                            ));
+                            ) {
+                                new_direction = Some(get_two_lines_intersection(
+                                    &Vec2f::new(path_item.0 as f32, path_item.1 as f32),
+                                    &Vec2f::new(pos_1.0 as f32, pos_1.1 as f32),
+                                    other_1,
+                                    &Vec2f::new(pos_2.0 as f32, pos_2.1 as f32),
+                                    other_2,
+                                ));
+                            } else if two_directions_converge(
+                                &Vec2f::new(pos_3.0 as f32, pos_3.1 as f32),
+                                other_3,
+                                &Vec2f::new(pos_2.0 as f32, pos_2.1 as f32),
+                                other_2,
+                            ) {
+                                new_direction = Some(get_two_lines_intersection(
+                                    &Vec2f::new(path_item.0 as f32, path_item.1 as f32),
+                                    &Vec2f::new(pos_3.0 as f32, pos_3.1 as f32),
+                                    other_3,
+                                    &Vec2f::new(pos_2.0 as f32, pos_2.1 as f32),
+                                    other_2,
+                                ));
+                            } else if two_directions_converge(
+                                &Vec2f::new(pos_1.0 as f32, pos_1.1 as f32),
+                                other_1,
+                                &Vec2f::new(pos_3.0 as f32, pos_3.1 as f32),
+                                other_3,
+                            ) {
+                                new_direction = Some(get_two_lines_intersection(
+                                    &Vec2f::new(path_item.0 as f32, path_item.1 as f32),
+                                    &Vec2f::new(pos_1.0 as f32, pos_1.1 as f32),
+                                    other_1,
+                                    &Vec2f::new(pos_3.0 as f32, pos_3.1 as f32),
+                                    other_3,
+                                ));
+                            }
                         }
                         _ => {}
                     }
@@ -130,8 +183,7 @@ impl Path {
                                 .get(&(path_item.0 + other_dir_x, path_item.1 + dir_y));
                             match (other_2, other_3) {
                                 (Some(other_2), Some(other_3)) => {
-                                    new_direction = Some(get_two_lines_intersection(
-                                        &Vec2f::new(path_item.0 as f32, path_item.1 as f32),
+                                    if two_directions_converge(
                                         &Vec2f::new(
                                             (path_item.0 + dir_x) as f32,
                                             (path_item.1 + dir_y) as f32,
@@ -142,7 +194,21 @@ impl Path {
                                             (path_item.1 + 0) as f32,
                                         ),
                                         other_2,
-                                    ));
+                                    ) {
+                                        new_direction = Some(get_two_lines_intersection(
+                                            &Vec2f::new(path_item.0 as f32, path_item.1 as f32),
+                                            &Vec2f::new(
+                                                (path_item.0 + dir_x) as f32,
+                                                (path_item.1 + dir_y) as f32,
+                                            ),
+                                            other,
+                                            &Vec2f::new(
+                                                (path_item.0 + other_dir_x) as f32,
+                                                (path_item.1 + 0) as f32,
+                                            ),
+                                            other_2,
+                                        ));
+                                    }
                                 }
                                 _ => {}
                             }
@@ -156,8 +222,7 @@ impl Path {
                                 .get(&(path_item.0 + dir_x, path_item.1 + other_dir_y));
                             match (other_2, other_3) {
                                 (Some(other_2), Some(other_3)) => {
-                                    new_direction = Some(get_two_lines_intersection(
-                                        &Vec2f::new(path_item.0 as f32, path_item.1 as f32),
+                                    if two_directions_converge(
                                         &Vec2f::new(
                                             (path_item.0 + dir_x) as f32,
                                             (path_item.1 + dir_y) as f32,
@@ -168,7 +233,21 @@ impl Path {
                                             (path_item.1 + other_dir_y) as f32,
                                         ),
                                         other_2,
-                                    ));
+                                    ) {
+                                        new_direction = Some(get_two_lines_intersection(
+                                            &Vec2f::new(path_item.0 as f32, path_item.1 as f32),
+                                            &Vec2f::new(
+                                                (path_item.0 + dir_x) as f32,
+                                                (path_item.1 + dir_y) as f32,
+                                            ),
+                                            other,
+                                            &Vec2f::new(
+                                                (path_item.0 + 0) as f32,
+                                                (path_item.1 + other_dir_y) as f32,
+                                            ),
+                                            other_2,
+                                        ));
+                                    }
                                 }
                                 _ => {}
                             }
@@ -238,28 +317,41 @@ impl PathFinder {
                 println!("End of search 1");
                 break;
             }
-            if position_index >= 1000 {
+            if position_index >= 100000 {
                 println!("End of search 2");
                 break;
             }
 
             let position = unhandled_positions[position_index];
 
-            for new_position in [
-                (position.0 - 1, position.1),
-                (position.0 + 1, position.1),
-                (position.0, position.1 - 1),
-                (position.0, position.1 + 1),
+            for pos_diff in [
+                (-1, 0),
+                (1, 0),
+                (0, -1),
+                (0, 1),
+                (1, 1),
+                (1, -1),
+                (-1, 1),
+                (-1, -1),
             ] {
+                let new_position = (position.0 + pos_diff.0, position.1 + pos_diff.1);
+
+                let is_corner_cutting = pos_diff.0 != 0 && pos_diff.1 != 0;
+                let corners_ok = !is_corner_cutting
+                    || (!ground.blocked_at(position.0 + pos_diff.0, position.1)
+                        && !ground.blocked_at(position.0, position.1 + pos_diff.1));
+
                 if !ground.blocked_at(new_position.0, new_position.1)
                     && !path_items.contains_key(&new_position)
+                    && corners_ok
                 {
                     path_items.insert(
                         new_position,
                         Vec2f::new(
                             (position.0 - new_position.0) as f32,
                             (position.1 - new_position.1) as f32,
-                        ),
+                        )
+                        .normalized(), // TODO: This expensive normalize operation could be optimized out
                     );
                     unhandled_positions.push(new_position);
                 }
@@ -267,8 +359,6 @@ impl PathFinder {
 
             position_index += 1;
         }
-
-        println!("Path list: {:?}", path_items);
 
         let path = Path::new(path_items);
 

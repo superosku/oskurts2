@@ -1,4 +1,5 @@
 use crate::ground::Ground;
+use crate::path_finder::Path;
 use crate::projectile_handler::ProjectileHandler;
 use crate::vec::{Vec2f, Vec2i};
 use std::cell::RefCell;
@@ -362,6 +363,7 @@ impl Entity {
         &mut self,
         closest_enemy: Option<&Rc<RefCell<Entity>>>,
         projectile_handler: &mut ProjectileHandler,
+        debug_path: &Option<Rc<RefCell<Path>>>,
     ) {
         // TODO: This is a hack against multiple mutable borrows
         let mut cloned_action = self.action.clone();
@@ -370,6 +372,31 @@ impl Entity {
             EntityAction::Idle => {
                 if let Some(closest_enemy) = closest_enemy {
                     self.interact_with_closest_enemy(closest_enemy, projectile_handler);
+                } else {
+                    if let Some(debug_path) = debug_path {
+                        let mut directions: Vec<Vec2f> = Vec::new();
+
+                        for i in [
+                            (self.position.clone() + Vec2f::new(0.0, self.radius)).as_vec2i(),
+                            (self.position.clone() + Vec2f::new(0.0, -self.radius)).as_vec2i(),
+                            (self.position.clone() + Vec2f::new(self.radius, 0.0)).as_vec2i(),
+                            (self.position.clone() + Vec2f::new(-self.radius, 0.0)).as_vec2i(),
+                        ] {
+                            if let Some(direction) = debug_path.borrow().get_direction(&i) {
+                                directions.push(direction);
+                            }
+                        }
+
+                        let mut avg_direction = Vec2f::new(0.0, 0.0);
+                        for direction in directions.iter() {
+                            avg_direction += direction.clone();
+                        }
+                        avg_direction = avg_direction / directions.len() as f32;
+
+                        let asdf_goal = self.position.clone() + avg_direction * 10.0;
+
+                        self.move_towards_goal(&asdf_goal);
+                    }
                 }
             }
             EntityAction::Move(goal) => {
