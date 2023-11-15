@@ -7,6 +7,7 @@ use crate::game::Game;
 use crate::vec::Vec2f;
 
 use crate::constants::{SCREEN_HEIGHT, SCREEN_WIDTH};
+use crate::ground::GroundType;
 use pixels::{Pixels, SurfaceTexture};
 use winit::keyboard::KeyCode;
 use winit::{
@@ -195,6 +196,21 @@ fn main() {
                             game.command_building_spawn(building_id);
                             game.command_building_spawn(building_id);
                         }
+                    }
+
+                    if input.key_pressed(KeyCode::KeyJ) {
+                        game.ground.set_at(
+                            cursor_game_pos.x as i32,
+                            cursor_game_pos.y as i32,
+                            GroundType::Wall,
+                        );
+                    }
+                    if input.key_pressed(KeyCode::KeyK) {
+                        game.ground.set_at(
+                            cursor_game_pos.x as i32,
+                            cursor_game_pos.y as i32,
+                            GroundType::Empty,
+                        );
                     }
 
                     if input.mouse_pressed(1) {

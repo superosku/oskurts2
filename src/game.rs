@@ -18,7 +18,7 @@ use std::time::Instant;
 pub struct Game {
     entity_container: EntityContainer,
     building_container: BuildingContainer,
-    ground: Ground,
+    pub ground: Ground,
     projectile_handler: ProjectileHandler,
     path_finder: PathFinder,
     pub debug_path: Option<Rc<RefCell<Path>>>,
