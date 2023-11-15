@@ -341,10 +341,16 @@ impl Entity {
             }
         }
 
+        let mut had_direction = false;
         let mut avg_direction = Vec2f::new(0.0, 0.0);
         for direction in directions.iter() {
             avg_direction += direction.clone();
+            had_direction = true;
         }
+        if !had_direction {
+            return;
+        }
+
         avg_direction = avg_direction / directions.len() as f32;
 
         let asdf_goal = self.position.clone() + avg_direction * 10.0;
