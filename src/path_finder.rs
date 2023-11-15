@@ -296,6 +296,11 @@ impl WPathItem {
             move_cost,
         }
     }
+
+    pub fn reweight(&mut self, goal: &Vec2i) {
+        let cost = ((self.position.0 - goal.x) as f32).powi(2) + ((self.position.1 - goal.y) as f32).powi(2);
+        self.cost = (cost * 100.0) as i64 + self.move_cost;
+    }
 }
 
 impl Ord for WPathItem {
@@ -330,35 +335,39 @@ impl PathFinder {
         let mut path_items: HashMap<PathItem, Vec2f> = HashMap::new();
         // let mut unhandled_positions: Vec<PathItem> = Vec::new();
 
-        let start: Vec2i = start_positions.iter().next().unwrap().clone();
+        let mut unfound_start_positions = start_positions.clone();
+        let mut current_start_position = match unfound_start_positions.iter().next() {
+            Some(pos) => pos.clone(),
+            None => return None,
+        };
 
         let mut unhandled_positions: BinaryHeap<WPathItem> = BinaryHeap::new();
 
         for i in 0..goal_height {
             if !ground.blocked_at(goal.x - 1, goal.y + i) {
                 path_items.insert((goal.x - 1, goal.y + i), Vec2f::new(1.0, 0.0));
-                unhandled_positions.push(WPathItem::new((goal.x - 1, goal.y + i), 0, &start));
+                unhandled_positions.push(WPathItem::new((goal.x - 1, goal.y + i), 0, &current_start_position));
             }
             if !ground.blocked_at(goal.x + goal_width, goal.y + i) {
                 path_items.insert((goal.x + goal_width, goal.y + i), Vec2f::new(-1.0, 0.0));
                 unhandled_positions.push(WPathItem::new(
                     (goal.x + goal_width, goal.y + i),
                     0,
-                    &start,
+                    &current_start_position,
                 ));
             }
         }
         for i in 0..goal_width {
             if !ground.blocked_at(goal.x + i, goal.y - 1) {
                 path_items.insert((goal.x + i, goal.y - 1), Vec2f::new(0.0, 1.0));
-                unhandled_positions.push(WPathItem::new((goal.x + i, goal.y - 1), 0, &start));
+                unhandled_positions.push(WPathItem::new((goal.x + i, goal.y - 1), 0, &current_start_position));
             }
             if !ground.blocked_at(goal.x + i, goal.y + goal_height) {
                 path_items.insert((goal.x + i, goal.y + goal_height), Vec2f::new(0.0, -1.0));
                 unhandled_positions.push(WPathItem::new(
                     (goal.x + i, goal.y + goal_height),
                     0,
-                    &start,
+                    &current_start_position,
                 ));
             }
         }
@@ -409,16 +418,33 @@ impl PathFinder {
                         .normalized(), // TODO: This expensive normalize operation could be optimized out
                     );
 
-                    if new_position.0 == start.x && new_position.1 == start.y {
-                        println!("Found path");
+                    // Remove the position from unfound position if it is there
+                    let new_position_vec = Vec2i::new(new_position.0, new_position.1);
+                    unfound_start_positions.remove(&new_position_vec);
+
+                    if unfound_start_positions.is_empty() {
+                        println!("Found all paths!");
                         break 'outer;
+                    }
+
+                    if current_start_position.x == new_position.0 && current_start_position.y == new_position.1 {
+                        current_start_position = match unfound_start_positions.iter().next() {
+                            Some(pos) => pos.clone(),
+                            None => {panic!("No more start positions left, this should not happen")}
+                        };
+
+                        // Do the re weighting of all the WPathItems
+                        unhandled_positions = unhandled_positions.into_iter().map(|mut w_path_item| {
+                            w_path_item.reweight(&current_start_position);
+                            w_path_item
+                        }).collect::<BinaryHeap<WPathItem>>();
                     }
 
                     // unhandled_positions.push(new_position);
                     unhandled_positions.push(WPathItem::new(
                         new_position,
                         w_path_item.move_cost + move_cost,
-                        &start,
+                        &current_start_position,
                     ));
                 }
             }
@@ -426,7 +452,12 @@ impl PathFinder {
             position_index += 1;
         }
 
-        let path = Path::new(path_items);
+        let mut path = Path::new(path_items);
+        path.do_orienting_round();
+        path.do_orienting_round();
+        path.do_orienting_round();
+        path.do_orienting_round();
+        path.do_orienting_round();
 
         let path_ref = Rc::new(RefCell::new(path));
         self.paths.push(path_ref.clone());
