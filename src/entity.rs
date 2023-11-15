@@ -59,6 +59,10 @@ impl Entity {
         entity
     }
 
+    pub fn health_ratio(&self) -> f32 {
+        self.health as f32 / self.max_health as f32
+    }
+
     pub fn new(position: Vec2f) -> Entity {
         let random_id = rand::random::<usize>();
         // Radius should be random between 0.25 and 0.5

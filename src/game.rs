@@ -229,17 +229,11 @@ impl Game {
         ];
 
         for entity_ref in self.entity_container.iter_alive() {
-            // entity.draw(dt, camera);
             let entity = entity_ref.borrow();
-
             let entity_position = entity.get_position();
 
-            let draw_pos = camera.world_to_screen(&Vec2f::new(
-                // self.position.x - 0.5,
-                // self.position.y - 0.5,
-                entity_position.x,
-                entity_position.y,
-            ));
+            let draw_pos =
+                camera.world_to_screen(&Vec2f::new(entity_position.x, entity_position.y));
 
             let path_builder = &mut path_builders[entity.get_team() as usize];
 
@@ -273,18 +267,6 @@ impl Game {
                 );
             }
         }
-
-        // let path_bulider_sources = [
-        //     Source::Solid(SolidSource::from_unpremultiplied_argb( 255, 0x7d, 0xde, 0x92, )),
-        //     Source::Solid(SolidSource::from_unpremultiplied_argb( 255, 0xde, 0x7d, 0x92, )),
-        //     Source::Solid(SolidSource::from_unpremultiplied_argb( 255, 0xde, 0x92, 0x7d, )),
-        //     Source::Solid(SolidSource::from_unpremultiplied_argb( 255, 0x92, 0xde, 0x7d, )),
-        // ];
-
-        // for i in 0..4 {
-        // let path = path_builders[i].finish();
-        // let source = &path_bulider_sources[i];
-        // let source_dark = Source::Solid(SolidSource::from_unpremultiplied_argb(255, 200, 200, 255));
 
         dt.fill(
             &path_builder_0.finish(),
@@ -332,16 +314,61 @@ impl Game {
             &selection_source,
             stroke_style,
             &DrawOptions::new(),
-        )
+        );
 
-        // let stroke_style = &mut raqote::StrokeStyle::default();
-        // stroke_style.width = camera.length_to_pixels(0.1);
-        // dt.stroke(
-        //     &path,
-        //     &source_dark,
-        //     stroke_style,
-        //     &DrawOptions::new(),
-        // );
+        for entity_ref in self.entity_container.iter_alive() {
+            let entity = entity_ref.borrow();
+            let entity_position = entity.get_position();
+
+            let health_ratio = entity.health_ratio();
+            if health_ratio < 1.0 {
+                let mut path_builder = PathBuilder::new();
+
+                let health_bar_top_left = camera.world_to_screen(&Vec2f::new(
+                    entity_position.x - entity.get_radius(),
+                    entity_position.y + entity.get_radius(),
+                ));
+                let health_bar_bottom_right = camera.world_to_screen(&Vec2f::new(
+                    entity_position.x + entity.get_radius(),
+                    entity_position.y + entity.get_radius() + 0.1,
+                ));
+                let health_bar_mid_x = health_bar_top_left.x
+                    + (health_bar_bottom_right.x - health_bar_top_left.x) * health_ratio;
+
+                let mut path_builder = PathBuilder::new();
+                path_builder.move_to(health_bar_top_left.x, health_bar_top_left.y);
+                path_builder.line_to(health_bar_mid_x, health_bar_top_left.y);
+                path_builder.line_to(health_bar_mid_x, health_bar_bottom_right.y);
+                path_builder.line_to(health_bar_top_left.x, health_bar_bottom_right.y);
+                path_builder.close();
+
+                let green = (health_ratio * 255.0) as u8;
+                let red = ((1.0 - health_ratio) * 255.0) as u8;
+
+                dt.fill(
+                    &path_builder.finish(),
+                    &Source::Solid(SolidSource::from_unpremultiplied_argb(
+                        255, red, green, 0x00,
+                    )),
+                    &DrawOptions::new(),
+                );
+
+                let mut path_builder = PathBuilder::new();
+                path_builder.move_to(health_bar_mid_x, health_bar_top_left.y);
+                path_builder.line_to(health_bar_bottom_right.x, health_bar_top_left.y);
+                path_builder.line_to(health_bar_bottom_right.x, health_bar_bottom_right.y);
+                path_builder.line_to(health_bar_mid_x, health_bar_bottom_right.y);
+                path_builder.close();
+
+                dt.fill(
+                    &path_builder.finish(),
+                    &Source::Solid(SolidSource::from_unpremultiplied_argb(
+                        255, 0x00, 0x00, 0x00,
+                    )),
+                    &DrawOptions::new(),
+                );
+            }
+        }
     }
 
     fn draw_ground(&self, dt: &mut DrawTarget, camera: &Camera) {
