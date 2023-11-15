@@ -580,25 +580,35 @@ impl Game {
         self.debug_path = found_path.clone();
 
         if let Some(found_path) = found_path {
-            for entity in self.entity_container.iter_alive() {
-                if entity_ids.contains(&entity.borrow().get_id()) {
-                    if is_gather_command {
-                        entity
-                            .borrow_mut()
-                            .set_action_gather(&goal_pos, &Vec2f::new(5.0, 5.0), 0);
-                    } else if is_attack_command {
-                        entity.borrow_mut().set_action_attack(
-                            found_path.clone(),
-                            &goal_pos,
-                            entity_ids.len() as i32,
-                        );
-                    } else {
-                        entity.borrow_mut().set_action_move(
-                            found_path.clone(),
-                            &goal_pos,
-                            entity_ids.len() as i32,
-                        );
-                    }
+            let entities_commanded: Vec<&Rc<RefCell<Entity>>> = self
+                .entity_container
+                .iter_alive()
+                .filter(|entity| entity_ids.contains(&entity.borrow().get_id()))
+                .collect();
+
+            let entity_mass = entities_commanded
+                .iter()
+                .map(|entity| {
+                    let radius = entity.borrow().get_radius();
+                    radius * radius * 4.0
+                })
+                .sum::<f32>();
+
+            for entity in entities_commanded {
+                if is_gather_command {
+                    entity
+                        .borrow_mut()
+                        .set_action_gather(&goal_pos, &Vec2f::new(5.0, 5.0), 0);
+                } else if is_attack_command {
+                    entity.borrow_mut().set_action_attack(
+                        found_path.clone(),
+                        &goal_pos,
+                        entity_mass,
+                    );
+                } else {
+                    entity
+                        .borrow_mut()
+                        .set_action_move(found_path.clone(), &goal_pos, entity_mass);
                 }
             }
         }

@@ -13,7 +13,7 @@ pub enum EntityType {
 #[derive(Clone)]
 pub struct Goal {
     position: Vec2f,
-    group_size: i32,
+    group_size: f32,
     path: Rc<RefCell<Path>>,
 }
 
@@ -109,7 +109,7 @@ impl Entity {
         self.id
     }
 
-    pub fn set_action_move(&mut self, path: Rc<RefCell<Path>>, goal: &Vec2f, goal_group_size: i32) {
+    pub fn set_action_move(&mut self, path: Rc<RefCell<Path>>, goal: &Vec2f, goal_group_size: f32) {
         println!("Setting action move");
         self.action = EntityAction::Move(Goal {
             path,
@@ -122,7 +122,7 @@ impl Entity {
         &mut self,
         path: Rc<RefCell<Path>>,
         goal: &Vec2f,
-        goal_group_size: i32,
+        goal_group_size: f32,
     ) {
         println!("Setting action attack");
         self.action = EntityAction::Attack(Goal {
@@ -327,9 +327,13 @@ impl Entity {
         self.next_position += delta.normalized() * self.speed;
     }
 
-    fn move_towards_path(&mut self, path: Rc<RefCell<Path>>) {
-        let mut directions: Vec<Vec2f> = Vec::new();
+    fn move_towards_path(&mut self, path: Rc<RefCell<Path>>, goal: &Vec2f) {
+        if self.distance_to_goal(goal) < 1.0 {
+            self.move_towards_goal(goal);
+            return;
+        }
 
+        let mut directions: Vec<Vec2f> = Vec::new();
         for i in [
             (self.position.clone() + Vec2f::new(0.0, self.radius)).as_vec2i(),
             (self.position.clone() + Vec2f::new(0.0, -self.radius)).as_vec2i(),
@@ -415,27 +419,23 @@ impl Entity {
                 }
             }
             EntityAction::Move(goal) => {
-                if self.distance_to_goal(&goal.position)
-                    < 1.0 * (goal.group_size as f32).sqrt() / 2.0
-                {
+                if self.distance_to_goal(&goal.position) < 1.0 * (goal.group_size).sqrt() / 1.5 {
                     cloned_action = EntityAction::Idle;
                     // self.action = EntityAction::Idle;
                 } else {
                     // self.move_towards_goal(&goal.position.clone());
-                    self.move_towards_path(goal.path.clone());
+                    self.move_towards_path(goal.path.clone(), &goal.position);
                 }
             }
             EntityAction::Attack(goal) => {
-                if self.distance_to_goal(&goal.position)
-                    < 1.0 * (goal.group_size as f32).sqrt() / 2.0
-                {
+                if self.distance_to_goal(&goal.position) < 1.0 * (goal.group_size).sqrt() / 2.0 {
                     cloned_action = EntityAction::Idle;
                     // self.action = EntityAction::Idle;
                 } else {
                     if let Some(closest_enemy) = closest_enemy {
                         self.interact_with_closest_enemy(closest_enemy, projectile_handler);
                     } else {
-                        self.move_towards_path(goal.path.clone());
+                        self.move_towards_path(goal.path.clone(), &goal.position);
                         // self.move_towards_goal(&goal.position.clone());
                     }
                 }
