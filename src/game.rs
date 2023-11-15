@@ -506,7 +506,7 @@ impl Game {
 
             let path = path_builder.finish();
             let source = Source::Solid(SolidSource::from_unpremultiplied_argb(
-                255, 0x00, 0x00, 0x00,
+                255, 0x38, 0x30, 0x31,
             ));
             let stroke_style = &mut raqote::StrokeStyle::default();
             dt.stroke(&path, &source, &stroke_style, &DrawOptions::new());
