@@ -14,6 +14,7 @@ pub enum EntityType {
 pub struct Goal {
     position: Vec2f,
     group_size: i32,
+    path: Rc<RefCell<Path>>,
 }
 
 #[derive(Clone)]
@@ -108,17 +109,24 @@ impl Entity {
         self.id
     }
 
-    pub fn set_action_move(&mut self, goal: &Vec2f, goal_group_size: i32) {
+    pub fn set_action_move(&mut self, path: Rc<RefCell<Path>>, goal: &Vec2f, goal_group_size: i32) {
         println!("Setting action move");
         self.action = EntityAction::Move(Goal {
+            path,
             position: goal.clone(),
             group_size: goal_group_size,
         });
     }
 
-    pub fn set_action_attack(&mut self, goal: &Vec2f, goal_group_size: i32) {
+    pub fn set_action_attack(
+        &mut self,
+        path: Rc<RefCell<Path>>,
+        goal: &Vec2f,
+        goal_group_size: i32,
+    ) {
         println!("Setting action attack");
         self.action = EntityAction::Attack(Goal {
+            path,
             position: goal.clone(),
             group_size: goal_group_size,
         });
@@ -319,6 +327,31 @@ impl Entity {
         self.next_position += delta.normalized() * self.speed;
     }
 
+    fn move_towards_path(&mut self, path: Rc<RefCell<Path>>) {
+        let mut directions: Vec<Vec2f> = Vec::new();
+
+        for i in [
+            (self.position.clone() + Vec2f::new(0.0, self.radius)).as_vec2i(),
+            (self.position.clone() + Vec2f::new(0.0, -self.radius)).as_vec2i(),
+            (self.position.clone() + Vec2f::new(self.radius, 0.0)).as_vec2i(),
+            (self.position.clone() + Vec2f::new(-self.radius, 0.0)).as_vec2i(),
+        ] {
+            if let Some(direction) = path.borrow().get_direction(&i) {
+                directions.push(direction);
+            }
+        }
+
+        let mut avg_direction = Vec2f::new(0.0, 0.0);
+        for direction in directions.iter() {
+            avg_direction += direction.clone();
+        }
+        avg_direction = avg_direction / directions.len() as f32;
+
+        let asdf_goal = self.position.clone() + avg_direction * 10.0;
+
+        self.move_towards_goal(&asdf_goal);
+    }
+
     // Helper for fn update
     fn interact_with_closest_enemy(
         &mut self,
@@ -373,30 +406,6 @@ impl Entity {
                 if let Some(closest_enemy) = closest_enemy {
                     self.interact_with_closest_enemy(closest_enemy, projectile_handler);
                 } else {
-                    if let Some(debug_path) = debug_path {
-                        let mut directions: Vec<Vec2f> = Vec::new();
-
-                        for i in [
-                            (self.position.clone() + Vec2f::new(0.0, self.radius)).as_vec2i(),
-                            (self.position.clone() + Vec2f::new(0.0, -self.radius)).as_vec2i(),
-                            (self.position.clone() + Vec2f::new(self.radius, 0.0)).as_vec2i(),
-                            (self.position.clone() + Vec2f::new(-self.radius, 0.0)).as_vec2i(),
-                        ] {
-                            if let Some(direction) = debug_path.borrow().get_direction(&i) {
-                                directions.push(direction);
-                            }
-                        }
-
-                        let mut avg_direction = Vec2f::new(0.0, 0.0);
-                        for direction in directions.iter() {
-                            avg_direction += direction.clone();
-                        }
-                        avg_direction = avg_direction / directions.len() as f32;
-
-                        let asdf_goal = self.position.clone() + avg_direction * 10.0;
-
-                        self.move_towards_goal(&asdf_goal);
-                    }
                 }
             }
             EntityAction::Move(goal) => {
@@ -406,7 +415,8 @@ impl Entity {
                     cloned_action = EntityAction::Idle;
                     // self.action = EntityAction::Idle;
                 } else {
-                    self.move_towards_goal(&goal.position.clone());
+                    // self.move_towards_goal(&goal.position.clone());
+                    self.move_towards_path(goal.path.clone());
                 }
             }
             EntityAction::Attack(goal) => {
@@ -419,7 +429,8 @@ impl Entity {
                     if let Some(closest_enemy) = closest_enemy {
                         self.interact_with_closest_enemy(closest_enemy, projectile_handler);
                     } else {
-                        self.move_towards_goal(&goal.position.clone());
+                        self.move_towards_path(goal.path.clone());
+                        // self.move_towards_goal(&goal.position.clone());
                     }
                 }
             }

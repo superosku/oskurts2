@@ -1,7 +1,7 @@
 use crate::ground::Ground;
 use crate::vec::{Vec2f, Vec2i};
 use std::cell::RefCell;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::rc::Rc;
 
 type PathItem = (i32, i32);
@@ -260,7 +260,12 @@ impl Path {
             }
 
             if let Some(new_direction) = new_direction {
-                new_position_datas.insert(*path_item, new_direction);
+                if new_direction.x.is_nan() || new_direction.y.is_nan() {
+                    println!("Why does this happen??");
+                    new_position_datas.insert(*path_item, direction.clone());
+                } else {
+                    new_position_datas.insert(*path_item, new_direction);
+                }
             } else {
                 new_position_datas.insert(*path_item, direction.clone());
             }
@@ -285,7 +290,7 @@ impl PathFinder {
         goal: Vec2i,
         goal_width: i32,
         goal_height: i32,
-        start_positions: Vec<Vec2i>,
+        start_positions: &HashSet<Vec2i>,
     ) -> Option<Rc<RefCell<Path>>> {
         let mut path_items: HashMap<PathItem, Vec2f> = HashMap::new();
         let mut unhandled_positions: Vec<PathItem> = Vec::new();
@@ -373,6 +378,8 @@ impl PathFinder {
         goal: Vec2i,
         start: Vec2i,
     ) -> Option<Rc<RefCell<Path>>> {
-        self.find_path(ground, goal, 1, 1, vec![start])
+        let mut start_positions = HashSet::new();
+        start_positions.insert(start);
+        self.find_path(ground, goal, 1, 1, &start_positions)
     }
 }

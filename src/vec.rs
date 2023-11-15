@@ -1,3 +1,4 @@
+use std::hash::Hash;
 use std::ops;
 
 #[derive(Debug, Clone)]
@@ -87,6 +88,23 @@ pub struct Vec2i {
     pub x: i32,
     pub y: i32,
 }
+
+impl Hash for Vec2i {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.x.hash(state);
+        self.y.hash(state);
+    }
+}
+
+impl PartialEq for Vec2i {
+    fn eq(&self, other: &Vec2i) -> bool {
+        self.x == other.x && self.y == other.y
+    }
+    fn ne(&self, other: &Vec2i) -> bool {
+        self.x != other.x || self.y != other.y
+    }
+}
+impl Eq for Vec2i {}
 
 impl Vec2i {
     pub fn new(x: i32, y: i32) -> Vec2i {

@@ -11,6 +11,7 @@ use crate::vec::{Vec2f, Vec2i};
 use rand::Rng;
 use raqote::{DrawOptions, DrawTarget, PathBuilder, SolidSource, Source};
 use std::cell::RefCell;
+use std::collections::HashSet;
 use std::rc::Rc;
 use std::time::Instant;
 
@@ -19,6 +20,7 @@ pub struct Game {
     building_container: BuildingContainer,
     ground: Ground,
     projectile_handler: ProjectileHandler,
+    path_finder: PathFinder,
     pub debug_path: Option<Rc<RefCell<Path>>>,
 }
 
@@ -47,13 +49,13 @@ impl Game {
         let start_time = Instant::now();
 
         let mut path_finder = PathFinder::new();
-        let debug_path =
-            path_finder.find_path(&ground, Vec2i::new(2, 2), 3, 3, vec![Vec2i::new(10, 10)]);
-        if let Some(path) = &debug_path {
-            for _ in 0..4 {
-                path.borrow_mut().do_orienting_round();
-            }
-        }
+        // let debug_path =
+        //     path_finder.find_path(&ground, Vec2i::new(2, 2), 3, 3, vec![Vec2i::new(10, 10)]);
+        // if let Some(path) = &debug_path {
+        //     for _ in 0..0 {
+        //         path.borrow_mut().do_orienting_round();
+        //     }
+        // }
 
         let total_time = start_time.elapsed().as_millis();
 
@@ -64,7 +66,8 @@ impl Game {
             building_container,
             ground,
             projectile_handler: ProjectileHandler::new(),
-            debug_path,
+            debug_path: None,
+            path_finder,
         }
     }
 
@@ -561,20 +564,41 @@ impl Game {
             _ => false,
         };
 
-        for entity in self.entity_container.iter_alive() {
-            if entity_ids.contains(&entity.borrow().get_id()) {
-                if is_gather_command {
-                    entity
-                        .borrow_mut()
-                        .set_action_gather(&goal_pos, &Vec2f::new(5.0, 5.0), 0);
-                } else if is_attack_command {
-                    entity
-                        .borrow_mut()
-                        .set_action_attack(&goal_pos, entity_ids.len() as i32);
-                } else {
-                    entity
-                        .borrow_mut()
-                        .set_action_move(&goal_pos, entity_ids.len() as i32);
+        let entity_positions_iter = self
+            .entity_container
+            .iter_alive()
+            .filter(|entity| entity_ids.contains(&entity.borrow().get_id()))
+            // entity_ids
+            // .iter()
+            .map(|entity| entity.borrow().get_position().as_vec2i());
+        let entity_positions: HashSet<Vec2i> = HashSet::from_iter(entity_positions_iter);
+
+        let found_path =
+            self.path_finder
+                .find_path(&self.ground, goal_pos.as_vec2i(), 1, 1, &entity_positions);
+
+        self.debug_path = found_path.clone();
+
+        if let Some(found_path) = found_path {
+            for entity in self.entity_container.iter_alive() {
+                if entity_ids.contains(&entity.borrow().get_id()) {
+                    if is_gather_command {
+                        entity
+                            .borrow_mut()
+                            .set_action_gather(&goal_pos, &Vec2f::new(5.0, 5.0), 0);
+                    } else if is_attack_command {
+                        entity.borrow_mut().set_action_attack(
+                            found_path.clone(),
+                            &goal_pos,
+                            entity_ids.len() as i32,
+                        );
+                    } else {
+                        entity.borrow_mut().set_action_move(
+                            found_path.clone(),
+                            &goal_pos,
+                            entity_ids.len() as i32,
+                        );
+                    }
                 }
             }
         }

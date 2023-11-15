@@ -190,6 +190,10 @@ fn main() {
                     if input.key_pressed_os(KeyCode::KeyQ) {
                         if let Some(building_id) = selected_building_id {
                             game.command_building_spawn(building_id);
+                            game.command_building_spawn(building_id);
+                            game.command_building_spawn(building_id);
+                            game.command_building_spawn(building_id);
+                            game.command_building_spawn(building_id);
                         }
                     }
 
