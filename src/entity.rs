@@ -114,7 +114,7 @@ impl Entity {
     }
 
     pub fn set_action_move(&mut self, path: Rc<RefCell<Path>>, goal: &Vec2f, goal_group_size: f32) {
-        println!("Setting action move");
+        // println!("Setting action move");
         self.action = EntityAction::Move(Goal {
             path,
             position: goal.clone(),
@@ -128,7 +128,7 @@ impl Entity {
         goal: &Vec2f,
         goal_group_size: f32,
     ) {
-        println!("Setting action attack");
+        // println!("Setting action attack");
         self.action = EntityAction::Attack(Goal {
             path,
             position: goal.clone(),
@@ -142,7 +142,7 @@ impl Entity {
         building_position: &Vec2f,
         resource_type: u8,
     ) {
-        println!("Setting action gather");
+        // println!("Setting action gather");
         self.action = EntityAction::Gather(GatherGoal {
             resource_position: resource_position.clone(),
             building_position: building_position.clone(),
@@ -174,7 +174,7 @@ impl Entity {
     //     self.goal.clone()
     // }
 
-    pub fn get_pushed(&mut self, other_position: Vec2f, other_radius: f32) {
+    pub fn get_pushed(&mut self, other_position: Vec2f, other_radius: f32, step_delta: f32) {
         let delta = self.position.clone() - other_position;
         if delta.length() == 0.0 {
             println!("Delta length is 0.0");
@@ -190,7 +190,7 @@ impl Entity {
         if delta_length < radius_sum {
             let vector_away_from_other = delta.normalized();
             let overlap_amount = radius_sum - delta_length;
-            self.next_position += vector_away_from_other * overlap_amount / 2.0;
+            self.next_position += vector_away_from_other * overlap_amount * step_delta / 2.0;
         }
     }
 
@@ -198,7 +198,7 @@ impl Entity {
         self.position = self.next_position.clone();
     }
 
-    pub fn collide_with_ground(&mut self, ground: &Ground) {
+    pub fn collide_with_ground(&mut self, ground: &Ground, step_delta: f32) {
         // Completely inside a block
         if ground.is_blocked(&self.next_position) {
             println!("Completely inside a block");
@@ -260,7 +260,7 @@ impl Entity {
             if delta_length < radius {
                 let vector_away_from_other = delta.normalized();
                 let overlap_amount = radius - delta_length;
-                self.next_position += vector_away_from_other * overlap_amount;
+                self.next_position += vector_away_from_other * overlap_amount * step_delta;
             }
         }
         if corner_match == 1 && ground.blocked_at(floor_x - 1, ceil_y) {
@@ -270,7 +270,7 @@ impl Entity {
             if delta_length < radius {
                 let vector_away_from_other = delta.normalized();
                 let overlap_amount = radius - delta_length;
-                self.next_position += vector_away_from_other * overlap_amount;
+                self.next_position += vector_away_from_other * overlap_amount * step_delta;
             }
         }
         if corner_match == 2 && ground.blocked_at(ceil_x, floor_y - 1) {
@@ -280,7 +280,7 @@ impl Entity {
             if delta_length < radius {
                 let vector_away_from_other = delta.normalized();
                 let overlap_amount = radius - delta_length;
-                self.next_position += vector_away_from_other * overlap_amount;
+                self.next_position += vector_away_from_other * overlap_amount * step_delta;
             }
         }
         if corner_match == 3 && ground.blocked_at(ceil_x, ceil_y) {
@@ -290,7 +290,7 @@ impl Entity {
             if delta_length < radius {
                 let vector_away_from_other = delta.normalized();
                 let overlap_amount = radius - delta_length;
-                self.next_position += vector_away_from_other * overlap_amount;
+                self.next_position += vector_away_from_other * overlap_amount * step_delta;
             }
         }
     }
@@ -326,14 +326,14 @@ impl Entity {
     }
 
     // Helper for fn update
-    fn move_towards_goal(&mut self, goal: &Vec2f) {
+    fn move_towards_goal(&mut self, goal: &Vec2f, step_delta: f32) {
         let delta = goal.clone() - self.position.clone();
-        self.next_position += delta.normalized() * self.speed;
+        self.next_position += delta.normalized() * self.speed * step_delta;
     }
 
-    fn move_towards_path(&mut self, path: Rc<RefCell<Path>>, goal: &Vec2f) {
+    fn move_towards_path(&mut self, path: Rc<RefCell<Path>>, goal: &Vec2f, step_delta: f32) {
         if self.distance_to_goal(goal) < 1.0 {
-            self.move_towards_goal(goal);
+            self.move_towards_goal(goal, step_delta);
             return;
         }
 
@@ -363,7 +363,7 @@ impl Entity {
 
         let asdf_goal = self.position.clone() + avg_direction * 10.0;
 
-        self.move_towards_goal(&asdf_goal);
+        self.move_towards_goal(&asdf_goal, step_delta);
     }
 
     // Helper for fn update
@@ -410,7 +410,7 @@ impl Entity {
         &mut self,
         closest_enemy: Option<Rc<RefCell<Entity>>>,
         projectile_handler: &mut ProjectileHandler,
-        debug_path: &Option<Rc<RefCell<Path>>>,
+        step_delta: f32,
     ) {
         // TODO: This is a hack against multiple mutable borrows
         let mut cloned_action = self.action.clone();
@@ -428,7 +428,7 @@ impl Entity {
                     // self.action = EntityAction::Idle;
                 } else {
                     // self.move_towards_goal(&goal.position.clone());
-                    self.move_towards_path(goal.path.clone(), &goal.position);
+                    self.move_towards_path(goal.path.clone(), &goal.position, step_delta);
                 }
             }
             EntityAction::Attack(goal) => {
@@ -439,7 +439,7 @@ impl Entity {
                     if let Some(closest_enemy) = closest_enemy {
                         self.interact_with_closest_enemy(&closest_enemy, projectile_handler);
                     } else {
-                        self.move_towards_path(goal.path.clone(), &goal.position);
+                        self.move_towards_path(goal.path.clone(), &goal.position, step_delta);
                         // self.move_towards_goal(&goal.position.clone());
                     }
                 }
@@ -456,7 +456,7 @@ impl Entity {
                             goal.going_towards_resource = false;
                         }
                     } else {
-                        self.move_towards_goal(&goal.resource_position.clone());
+                        self.move_towards_goal(&goal.resource_position.clone(), step_delta);
                     }
                 } else {
                     if self.distance_to_block(&goal.building_position.as_vec2i())
@@ -467,7 +467,7 @@ impl Entity {
                         goal.counter = 0;
                         goal.going_towards_resource = true;
                     } else {
-                        self.move_towards_goal(&goal.building_position.clone());
+                        self.move_towards_goal(&goal.building_position.clone(), step_delta);
                     }
                 }
             }

@@ -29,12 +29,22 @@ impl Game {
         let mut entities: Vec<Entity> = Vec::new();
 
         // Spawn 10 entities at random positions in the range of -10, 10
-        for _ in 0..ENTITY_AMOUNT {
-            let mut rng = rand::thread_rng();
-            let x = rng.gen_range(1.0..GROUND_WIDTH as f32 - 1.0);
-            let y = rng.gen_range(1.0..GROUND_HEIGHT as f32 - 1.0);
-            entities.push(Entity::new(Vec2f::new(x, y)));
+        // for _ in 0..ENTITY_AMOUNT {
+        //     let mut rng = rand::thread_rng();
+        //     let x = rng.gen_range(1.0..GROUND_WIDTH as f32 - 1.0);
+        //     let y = rng.gen_range(1.0..GROUND_HEIGHT as f32 - 1.0);
+        //     entities.push(Entity::new(Vec2f::new(x, y)));
+        // }
+
+        for i in 0..200 {
+            entities.push(Entity::new_params(
+                Vec2f::new(3.0 + i as f32 / 1000.0, 3.0 + i as f32 / 1000.0),
+                0,
+                0.3,
+                EntityType::Meelee,
+            ))
         }
+
         let mut entity_container = EntityContainer::new(entities);
 
         let mut ground = Ground::new();
@@ -226,12 +236,13 @@ impl Game {
                 camera.world_to_screen(&Vec2f::new(entity_position.x, entity_position.y));
 
             let path_builder = &mut path_builders[entity.get_team() as usize];
+            let radius = entity.get_radius() - 0.0;
 
             path_builder.move_to(draw_pos.x, draw_pos.y);
             path_builder.arc(
                 draw_pos.x,
                 draw_pos.y,
-                camera.length_to_pixels(entity.get_radius()),
+                camera.length_to_pixels(radius),
                 0.0,
                 2.0 * std::f32::consts::PI,
             );
@@ -245,15 +256,15 @@ impl Game {
                 }
 
                 let top_right_corner = camera.world_to_screen(&Vec2f::new(
-                    entity_position.x - entity.get_radius(),
-                    entity_position.y - entity.get_radius(),
+                    entity_position.x - radius,
+                    entity_position.y - radius,
                 ));
 
                 selection_path_builder.rect(
                     top_right_corner.x,
                     top_right_corner.y,
-                    camera.length_to_pixels(entity.get_radius() * 2.0),
-                    camera.length_to_pixels(entity.get_radius() * 2.0),
+                    camera.length_to_pixels(radius * 2.0),
+                    camera.length_to_pixels(radius * 2.0),
                 );
             }
         }
@@ -658,26 +669,38 @@ impl Game {
         // Make sure entity container is up to date
         self.entity_container.update_entities_by_area();
 
-        // Update entities
-        for entity in self.entity_container.iter_alive() {
-            let closest_enemy = self.entity_container.get_closest_entity(
-                &entity.borrow().get_position(),
-                8.0,
-                None,
-                Some(entity.borrow().get_team()),
-            );
+        // // Update entities
+        // for entity in self.entity_container.iter_alive() {
+        //     let closest_enemy = self.entity_container.get_closest_entity(
+        //         &entity.borrow().get_position(),
+        //         8.0,
+        //         None,
+        //         Some(entity.borrow().get_team()),
+        //     );
+        //
+        //     entity.borrow_mut().update(
+        //         closest_enemy,
+        //         &mut self.projectile_handler,
+        //     );
+        // }
 
-            entity.borrow_mut().update(
-                closest_enemy,
-                &mut self.projectile_handler,
-                &self.debug_path,
-            );
-        }
+        let mut entity_close: Vec<(
+            &Rc<RefCell<Entity>>,
+            Option<Rc<RefCell<Entity>>>,
+            Vec<Rc<RefCell<Entity>>>,
+        )> = Vec::new();
 
-        // Entities push each other
         for entity1 in self.entity_container.iter_alive() {
             let entity1_position = entity1.borrow().get_position();
 
+            let closest_enemy = self.entity_container.get_closest_entity(
+                &entity1.borrow().get_position(),
+                8.0,
+                None,
+                Some(entity1.borrow().get_team()),
+            );
+
+            let mut close_entities: Vec<Rc<RefCell<Entity>>> = Vec::new();
             for entity in self
                 .entity_container
                 .entities_in_radius(&entity1_position, 2.0, None, None)
@@ -686,20 +709,46 @@ impl Game {
                 if entity.borrow().get_id() == entity1.borrow().get_id() {
                     continue;
                 }
-                let other_position = entity.borrow().get_position();
-                let other_radius = entity.borrow().get_radius();
-                entity1
-                    .borrow_mut()
-                    .get_pushed(other_position, other_radius);
+                close_entities.push(entity.clone());
             }
+            entity_close.push((entity1, closest_enemy, close_entities));
         }
 
-        // Entities collide with ground
-        for entity in self.entity_container.iter_alive() {
-            entity.borrow_mut().collide_with_ground(&self.ground);
+        let steps = 4;
+        let step_delta = 1.0 / steps as f32;
 
-            // Flip updated position of each entity (should be done last after each move)
-            entity.borrow_mut().flip_position();
+        for _ in 0..steps {
+            for (entity1, closest_enemy, close_entities) in entity_close.iter() {
+                // Update entities
+                entity1.borrow_mut().update(
+                    closest_enemy.clone(),
+                    &mut self.projectile_handler,
+                    step_delta,
+                );
+
+                // Entities push each other
+                for entity in close_entities {
+                    // for entity in self
+                    //     .entity_container
+                    //     .entities_in_radius(&entity1_position, 2.0, None, None)
+                    //     .iter()
+                    // {
+                    if entity.borrow().get_id() == entity1.borrow().get_id() {
+                        continue;
+                    }
+                    let other_position = entity.borrow().get_position();
+                    let other_radius = entity.borrow().get_radius();
+                    entity1
+                        .borrow_mut()
+                        .get_pushed(other_position, other_radius, 1.0);
+                }
+
+                // Entities collide with ground
+                entity1.borrow_mut().collide_with_ground(&self.ground, 1.0);
+
+                // Flip updated position of each entity (should be done last after each move)
+                entity1.borrow_mut().flip_position();
+            }
         }
 
         // Update projectiles
