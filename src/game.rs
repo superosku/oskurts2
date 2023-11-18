@@ -36,7 +36,7 @@ impl Game {
         //     entities.push(Entity::new(Vec2f::new(x, y)));
         // }
 
-        for i in 0..200 {
+        for i in 0..20 {
             entities.push(Entity::new_params(
                 Vec2f::new(3.0 + i as f32 / 1000.0, 3.0 + i as f32 / 1000.0),
                 0,

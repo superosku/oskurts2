@@ -185,7 +185,7 @@ fn main() {
                     game.command_entities_simple(&selected_ids, false, true);
                 }
 
-                if input.key_pressed(KeyCode::KeyS) {
+                if input.key_pressed(KeyCode::KeyG) {
                     game.command_entities_simple(&selected_ids, true, false);
                 }
 

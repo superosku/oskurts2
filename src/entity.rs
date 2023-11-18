@@ -3,6 +3,7 @@ use crate::path_finder::Path;
 use crate::projectile_handler::ProjectileHandler;
 use crate::vec::{Vec2f, Vec2i};
 use std::cell::RefCell;
+use std::fmt::{Debug, Formatter};
 use std::rc::Rc;
 
 pub enum EntityType {
@@ -17,7 +18,13 @@ pub struct Goal {
     path: Rc<RefCell<Path>>,
 }
 
-#[derive(Clone)]
+impl Debug for Goal {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "Goal")
+    }
+}
+
+#[derive(Clone, Debug)]
 pub struct GatherGoal {
     resource_position: Vec2f,
     building_position: Vec2f,
@@ -26,7 +33,7 @@ pub struct GatherGoal {
     counter: i32,
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub enum EntityAction {
     Move(Goal),
     Attack(Goal),
@@ -86,8 +93,8 @@ impl Entity {
             radius: random_radius,
             team: random_team,
             projectile_cooldown: 0,
-            health: 100,
-            max_health: 100,
+            health: 1000,
+            max_health: 1000,
             entity_type: random_entity_type,
         }
     }
@@ -112,20 +119,25 @@ impl Entity {
         self.id
     }
 
+    fn set_action(&mut self, action: EntityAction) {
+        println!("set_action {:?}", action);
+        self.action = action;
+    }
+
     pub fn set_action_hold(&mut self) {
-        self.action = EntityAction::Hold;
+        self.set_action(EntityAction::Hold);
     }
 
     pub fn set_action_idle(&mut self) {
-        self.action = EntityAction::Idle;
+        self.set_action(EntityAction::Idle);
     }
 
     pub fn set_action_move(&mut self, path: Rc<RefCell<Path>>, goal: &Vec2f, goal_group_size: f32) {
-        self.action = EntityAction::Move(Goal {
+        self.set_action(EntityAction::Move(Goal {
             path,
             position: goal.clone(),
             group_size: goal_group_size,
-        });
+        }));
     }
 
     pub fn set_action_attack(
@@ -134,11 +146,11 @@ impl Entity {
         goal: &Vec2f,
         goal_group_size: f32,
     ) {
-        self.action = EntityAction::Attack(Goal {
+        self.set_action(EntityAction::Attack(Goal {
             path,
             position: goal.clone(),
             group_size: goal_group_size,
-        });
+        }));
     }
 
     pub fn set_action_gather(
@@ -147,13 +159,13 @@ impl Entity {
         building_position: &Vec2f,
         resource_type: u8,
     ) {
-        self.action = EntityAction::Gather(GatherGoal {
+        self.set_action(EntityAction::Gather(GatherGoal {
             resource_position: resource_position.clone(),
             building_position: building_position.clone(),
             resource_type: resource_type,
             going_towards_resource: true,
             counter: 0,
-        });
+        }));
     }
 
     pub fn get_goal(&self) -> Option<Vec2f> {
