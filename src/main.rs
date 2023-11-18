@@ -183,10 +183,9 @@ fn main() {
 
                 let cursor_option = input.cursor();
                 if let Some(cursor) = cursor_option {
-                    let cursor_game_pos = camera.screen_to_world(&Vec2f::new(
-                        cursor.0 / 2.0, // TODO: /2.0 or /1.0 depends on the monitor... (scale factor?)
-                        cursor.1 / 2.0,
-                    ));
+                    let scale = window.scale_factor() as f32;
+                    let cursor_game_pos =
+                        camera.screen_to_world(&Vec2f::new(cursor.0 / scale, cursor.1 / scale));
 
                     if input.key_pressed_os(KeyCode::KeyQ) {
                         if let Some(building_id) = selected_building_id {
@@ -198,14 +197,14 @@ fn main() {
                         }
                     }
 
-                    if input.key_pressed(KeyCode::KeyJ) {
+                    if input.key_held(KeyCode::KeyJ) {
                         game.ground.set_at(
                             cursor_game_pos.x as i32,
                             cursor_game_pos.y as i32,
                             GroundType::Wall,
                         );
                     }
-                    if input.key_pressed(KeyCode::KeyK) {
+                    if input.key_held(KeyCode::KeyK) {
                         game.ground.set_at(
                             cursor_game_pos.x as i32,
                             cursor_game_pos.y as i32,

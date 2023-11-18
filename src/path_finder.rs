@@ -351,38 +351,30 @@ impl PathFinder {
 
         for i in 0..goal_height {
             if !ground.blocked_at(goal.x - 1, goal.y + i) {
-                path_items.insert((goal.x - 1, goal.y + i), Vec2f::new(1.0, 0.0));
-                unhandled_positions.push(WPathItem::new(
-                    (goal.x - 1, goal.y + i),
-                    0,
-                    &current_start_position,
-                ));
+                let pos = (goal.x - 1, goal.y + i);
+                path_items.insert(pos, Vec2f::new(1.0, 0.0));
+                unhandled_positions.push(WPathItem::new(pos, 0, &current_start_position));
+                unfound_start_positions.remove(&Vec2i::new(pos.0, pos.1));
             }
             if !ground.blocked_at(goal.x + goal_width, goal.y + i) {
-                path_items.insert((goal.x + goal_width, goal.y + i), Vec2f::new(-1.0, 0.0));
-                unhandled_positions.push(WPathItem::new(
-                    (goal.x + goal_width, goal.y + i),
-                    0,
-                    &current_start_position,
-                ));
+                let pos = (goal.x + goal_width, goal.y + i);
+                path_items.insert(pos, Vec2f::new(-1.0, 0.0));
+                unhandled_positions.push(WPathItem::new(pos, 0, &current_start_position));
+                unfound_start_positions.remove(&Vec2i::new(pos.0, pos.1));
             }
         }
         for i in 0..goal_width {
             if !ground.blocked_at(goal.x + i, goal.y - 1) {
-                path_items.insert((goal.x + i, goal.y - 1), Vec2f::new(0.0, 1.0));
-                unhandled_positions.push(WPathItem::new(
-                    (goal.x + i, goal.y - 1),
-                    0,
-                    &current_start_position,
-                ));
+                let pos = (goal.x + i, goal.y - 1);
+                path_items.insert(pos, Vec2f::new(0.0, 1.0));
+                unhandled_positions.push(WPathItem::new(pos, 0, &current_start_position));
+                unfound_start_positions.remove(&Vec2i::new(pos.0, pos.1));
             }
             if !ground.blocked_at(goal.x + i, goal.y + goal_height) {
-                path_items.insert((goal.x + i, goal.y + goal_height), Vec2f::new(0.0, -1.0));
-                unhandled_positions.push(WPathItem::new(
-                    (goal.x + i, goal.y + goal_height),
-                    0,
-                    &current_start_position,
-                ));
+                let pos = (goal.x + i, goal.y + goal_height);
+                path_items.insert(pos, Vec2f::new(0.0, -1.0));
+                unhandled_positions.push(WPathItem::new(pos, 0, &current_start_position));
+                unfound_start_positions.remove(&Vec2i::new(pos.0, pos.1));
             }
         }
 

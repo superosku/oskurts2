@@ -39,10 +39,24 @@ impl Game {
 
         let mut ground = Ground::new();
 
+        for x in 0..10 {
+            for y in 0..10 {
+                ground.set_at(8 - 4 + x, 8 - 4 + y, GroundType::Empty);
+                ground.set_at(
+                    GROUND_WIDTH - 8 - 4 + x,
+                    GROUND_HEIGHT - 8 - 4 + y,
+                    GroundType::Empty,
+                );
+            }
+        }
+        for i in 0..5 {
+            ground.set_at(4, 7 + i, GroundType::Gold);
+            ground.set_at(GROUND_WIDTH - 9 + i, GROUND_HEIGHT - 4, GroundType::Gold);
+        }
         let mut building_container = BuildingContainer::new();
-        building_container.add_building(Building::new(Vec2i::new(2, 2), 3, 3, 0), &mut ground);
+        building_container.add_building(Building::new(Vec2i::new(8, 8), 2, 3, 0), &mut ground);
         building_container.add_building(
-            Building::new(Vec2i::new(GROUND_WIDTH - 5, GROUND_HEIGHT - 5), 3, 3, 1),
+            Building::new(Vec2i::new(GROUND_WIDTH - 8, GROUND_HEIGHT - 8), 3, 2, 1),
             &mut ground,
         );
 
