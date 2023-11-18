@@ -600,6 +600,28 @@ impl Game {
         }
     }
 
+    pub fn command_entities_simple(
+        &mut self,
+        entity_ids: &Vec<usize>,
+        is_idle: bool,
+        is_hold: bool,
+    ) {
+        let entities_commanded: Vec<&Rc<RefCell<Entity>>> = self
+            .entity_container
+            .iter_alive()
+            .filter(|entity| entity_ids.contains(&entity.borrow().get_id()))
+            .collect();
+
+        for entity in entities_commanded {
+            if is_idle {
+                entity.borrow_mut().set_action_idle();
+            }
+            if is_hold {
+                entity.borrow_mut().set_action_hold();
+            }
+        }
+    }
+
     pub fn command_entities_move(
         &mut self,
         entity_ids: &Vec<usize>,
@@ -669,27 +691,11 @@ impl Game {
         // Make sure entity container is up to date
         self.entity_container.update_entities_by_area();
 
-        // // Update entities
-        // for entity in self.entity_container.iter_alive() {
-        //     let closest_enemy = self.entity_container.get_closest_entity(
-        //         &entity.borrow().get_position(),
-        //         8.0,
-        //         None,
-        //         Some(entity.borrow().get_team()),
-        //     );
-        //
-        //     entity.borrow_mut().update(
-        //         closest_enemy,
-        //         &mut self.projectile_handler,
-        //     );
-        // }
-
         let mut entity_close: Vec<(
             &Rc<RefCell<Entity>>,
             Option<Rc<RefCell<Entity>>>,
             Vec<Rc<RefCell<Entity>>>,
         )> = Vec::new();
-
         for entity1 in self.entity_container.iter_alive() {
             let entity1_position = entity1.borrow().get_position();
 
@@ -714,37 +720,58 @@ impl Game {
             entity_close.push((entity1, closest_enemy, close_entities));
         }
 
-        let steps = 4;
+        let steps = 8;
         let step_delta = 1.0 / steps as f32;
 
-        for _ in 0..steps {
+        for step_n in 0..steps {
             for (entity1, closest_enemy, close_entities) in entity_close.iter() {
                 // Update entities
                 entity1.borrow_mut().update(
                     closest_enemy.clone(),
                     &mut self.projectile_handler,
+                    step_n,
                     step_delta,
                 );
 
-                // Entities push each other
+                // Entities push each other (Other team)
                 for entity in close_entities {
-                    // for entity in self
-                    //     .entity_container
-                    //     .entities_in_radius(&entity1_position, 2.0, None, None)
-                    //     .iter()
-                    // {
                     if entity.borrow().get_id() == entity1.borrow().get_id() {
+                        continue;
+                    }
+                    let is_same_team = entity.borrow().get_team() == entity1.borrow().get_team();
+                    if !is_same_team {
                         continue;
                     }
                     let other_position = entity.borrow().get_position();
                     let other_radius = entity.borrow().get_radius();
-                    entity1
-                        .borrow_mut()
-                        .get_pushed(other_position, other_radius, 1.0);
+                    entity1.borrow_mut().get_pushed(
+                        other_position,
+                        other_radius,
+                        1.0,
+                        is_same_team,
+                    );
                 }
-
                 // Entities collide with ground
                 entity1.borrow_mut().collide_with_ground(&self.ground, 1.0);
+
+                // Entities push each other (Same team)
+                for entity in close_entities {
+                    if entity.borrow().get_id() == entity1.borrow().get_id() {
+                        continue;
+                    }
+                    let is_same_team = entity.borrow().get_team() == entity1.borrow().get_team();
+                    if is_same_team {
+                        continue;
+                    }
+                    let other_position = entity.borrow().get_position();
+                    let other_radius = entity.borrow().get_radius();
+                    entity1.borrow_mut().get_pushed(
+                        other_position,
+                        other_radius,
+                        1.0,
+                        is_same_team,
+                    );
+                }
 
                 // Flip updated position of each entity (should be done last after each move)
                 entity1.borrow_mut().flip_position();
@@ -758,7 +785,7 @@ impl Game {
                 &projectile.get_position(),
                 1.0,
                 None,
-                None, // TODO: Projectile should have team and we should filter out team members
+                Some(projectile.get_team()),
             ) {
                 entity_hit.borrow_mut().take_damage(projectile.get_damage());
             }

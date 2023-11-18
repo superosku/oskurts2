@@ -32,6 +32,7 @@ pub enum EntityAction {
     Attack(Goal),
     Idle,
     Gather(GatherGoal),
+    Hold,
 }
 
 pub struct Entity {
@@ -79,7 +80,6 @@ impl Entity {
         Entity {
             position: position.clone(),
             next_position: position.clone(),
-            // goal: Some(Vec2f::new(10.0, 10.0)),
             action: EntityAction::Idle,
             speed: 0.05,
             id: random_id,
@@ -97,7 +97,6 @@ impl Entity {
     }
 
     pub fn take_damage(&mut self, damage: i32) {
-        // println!("Taking damage! {}", self.health);
         self.health -= damage;
     }
 
@@ -113,8 +112,15 @@ impl Entity {
         self.id
     }
 
+    pub fn set_action_hold(&mut self) {
+        self.action = EntityAction::Hold;
+    }
+
+    pub fn set_action_idle(&mut self) {
+        self.action = EntityAction::Idle;
+    }
+
     pub fn set_action_move(&mut self, path: Rc<RefCell<Path>>, goal: &Vec2f, goal_group_size: f32) {
-        // println!("Setting action move");
         self.action = EntityAction::Move(Goal {
             path,
             position: goal.clone(),
@@ -128,7 +134,6 @@ impl Entity {
         goal: &Vec2f,
         goal_group_size: f32,
     ) {
-        // println!("Setting action attack");
         self.action = EntityAction::Attack(Goal {
             path,
             position: goal.clone(),
@@ -142,7 +147,6 @@ impl Entity {
         building_position: &Vec2f,
         resource_type: u8,
     ) {
-        // println!("Setting action gather");
         self.action = EntityAction::Gather(GatherGoal {
             resource_position: resource_position.clone(),
             building_position: building_position.clone(),
@@ -169,12 +173,14 @@ impl Entity {
     pub fn get_position(&self) -> Vec2f {
         self.position.clone()
     }
-    //
-    // pub fn get_goal(&self) -> Option<Vec2f> {
-    //     self.goal.clone()
-    // }
 
-    pub fn get_pushed(&mut self, other_position: Vec2f, other_radius: f32, step_delta: f32) {
+    pub fn get_pushed(
+        &mut self,
+        other_position: Vec2f,
+        other_radius: f32,
+        step_delta: f32,
+        is_same_team: bool,
+    ) {
         let delta = self.position.clone() - other_position;
         if delta.length() == 0.0 {
             println!("Delta length is 0.0");
@@ -190,7 +196,17 @@ impl Entity {
         if delta_length < radius_sum {
             let vector_away_from_other = delta.normalized();
             let overlap_amount = radius_sum - delta_length;
-            self.next_position += vector_away_from_other * overlap_amount * step_delta / 2.0;
+            if is_same_team {
+                self.next_position += vector_away_from_other * overlap_amount * step_delta / 2.0;
+            } else {
+                let total_overlap = overlap_amount;
+                let move_dist = self.position.clone() - self.next_position.clone();
+                let total_move = move_dist.length();
+
+                let move_amount = (total_overlap * step_delta).min(total_move);
+
+                self.next_position += vector_away_from_other * move_amount;
+            }
         }
     }
 
@@ -371,8 +387,12 @@ impl Entity {
         &mut self,
         closest_enemy: &Rc<RefCell<Entity>>,
         projectile_handler: &mut ProjectileHandler,
+        step_n: i32,
+        step_delta: f32,
+        can_move: bool,
     ) {
-        let delta = closest_enemy.borrow().position.clone() - self.position.clone();
+        let enemy_position = closest_enemy.borrow().position.clone();
+        let delta = enemy_position.clone() - self.position.clone();
         let delta_length = delta.length();
         let combined_length = self.radius + closest_enemy.borrow().radius;
 
@@ -382,27 +402,34 @@ impl Entity {
         };
 
         if delta_length > min_range {
-            self.next_position += delta.normalized() * self.speed;
-        } else {
-            if self.projectile_cooldown == 0 {
-                match self.entity_type {
-                    EntityType::Ranged => {
-                        projectile_handler.add_ranged_projectile(
-                            self.position.clone(),
-                            closest_enemy.borrow().position.clone(),
-                        );
-                    }
-                    EntityType::Meelee => {
-                        projectile_handler
-                            .add_meelee_projectile(closest_enemy.borrow().position.clone());
-                    }
-                }
-                self.projectile_cooldown = 100;
-            } else {
-                self.projectile_cooldown -= 1;
+            // self.next_position += delta.normalized() * self.speed * step_delta;
+            // self.move_towards_goal(&delta.normalized(), step_delta);
+            if can_move {
+                self.move_towards_goal(&enemy_position, step_delta);
             }
-            // TODO: Put down a projectile
-            // TODO: How about cooldown
+        } else {
+            if step_n == 0 {
+                if self.projectile_cooldown == 0 {
+                    match self.entity_type {
+                        EntityType::Ranged => {
+                            projectile_handler.add_ranged_projectile(
+                                self.position.clone(),
+                                closest_enemy.borrow().position.clone(),
+                                self.team,
+                            );
+                        }
+                        EntityType::Meelee => {
+                            projectile_handler.add_meelee_projectile(
+                                closest_enemy.borrow().position.clone(),
+                                self.team,
+                            );
+                        }
+                    }
+                    self.projectile_cooldown = 100;
+                } else {
+                    self.projectile_cooldown -= 1;
+                }
+            }
         }
     }
 
@@ -410,6 +437,7 @@ impl Entity {
         &mut self,
         closest_enemy: Option<Rc<RefCell<Entity>>>,
         projectile_handler: &mut ProjectileHandler,
+        step_n: i32,
         step_delta: f32,
     ) {
         // TODO: This is a hack against multiple mutable borrows
@@ -418,7 +446,13 @@ impl Entity {
         match &mut cloned_action {
             EntityAction::Idle => {
                 if let Some(closest_enemy) = closest_enemy {
-                    self.interact_with_closest_enemy(&closest_enemy, projectile_handler);
+                    self.interact_with_closest_enemy(
+                        &closest_enemy,
+                        projectile_handler,
+                        step_n,
+                        step_delta,
+                        true,
+                    );
                 } else {
                 }
             }
@@ -437,7 +471,13 @@ impl Entity {
                     // self.action = EntityAction::Idle;
                 } else {
                     if let Some(closest_enemy) = closest_enemy {
-                        self.interact_with_closest_enemy(&closest_enemy, projectile_handler);
+                        self.interact_with_closest_enemy(
+                            &closest_enemy,
+                            projectile_handler,
+                            step_n,
+                            step_delta,
+                            true,
+                        );
                     } else {
                         self.move_towards_path(goal.path.clone(), &goal.position, step_delta);
                         // self.move_towards_goal(&goal.position.clone());
@@ -469,6 +509,18 @@ impl Entity {
                     } else {
                         self.move_towards_goal(&goal.building_position.clone(), step_delta);
                     }
+                }
+            }
+            EntityAction::Hold => {
+                if let Some(closest_enemy) = closest_enemy {
+                    self.interact_with_closest_enemy(
+                        &closest_enemy,
+                        projectile_handler,
+                        step_n,
+                        step_delta,
+                        false,
+                    );
+                } else {
                 }
             }
         }

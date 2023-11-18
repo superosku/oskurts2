@@ -181,6 +181,14 @@ fn main() {
                     camera.zoom(1.0 + scroll_diff.1 / 100.0);
                 }
 
+                if input.key_pressed(KeyCode::KeyH) {
+                    game.command_entities_simple(&selected_ids, false, true);
+                }
+
+                if input.key_pressed(KeyCode::KeyS) {
+                    game.command_entities_simple(&selected_ids, true, false);
+                }
+
                 let cursor_option = input.cursor();
                 if let Some(cursor) = cursor_option {
                     let scale = window.scale_factor() as f32;
@@ -212,7 +220,7 @@ fn main() {
                         );
                     }
 
-                    if input.mouse_pressed(1) {
+                    if input.mouse_pressed(1) || input.key_pressed(KeyCode::KeyR) {
                         game.command_entities_move(
                             &selected_ids,
                             &cursor_game_pos,

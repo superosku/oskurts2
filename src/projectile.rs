@@ -5,16 +5,28 @@ pub struct Projectile {
     goal: Option<Vec2f>,
     damage: i32,
     speed: f32,
+    team: u8,
 }
 
 impl Projectile {
-    pub fn new(position: Vec2f, goal: Option<Vec2f>, damage: i32, speed: f32) -> Projectile {
+    pub fn new(
+        position: Vec2f,
+        goal: Option<Vec2f>,
+        damage: i32,
+        speed: f32,
+        team: u8,
+    ) -> Projectile {
         Projectile {
             position,
             goal,
             damage,
             speed,
+            team,
         }
+    }
+
+    pub fn get_team(&self) -> u8 {
+        self.team
     }
 
     pub fn get_position(&self) -> Vec2f {

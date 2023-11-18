@@ -47,13 +47,13 @@ impl ProjectileHandler {
             .retain(|projectile| !projectile.ready_to_impact())
     }
 
-    pub fn add_meelee_projectile(&mut self, position: Vec2f) {
-        let projectile = Projectile::new(position, None, 9, 0.0);
+    pub fn add_meelee_projectile(&mut self, position: Vec2f, team: u8) {
+        let projectile = Projectile::new(position, None, 9, 0.0, team);
         self.projectiles.push(projectile);
     }
 
-    pub fn add_ranged_projectile(&mut self, position: Vec2f, goal: Vec2f) {
-        let projectile = Projectile::new(position, Some(goal), 9, 0.1);
+    pub fn add_ranged_projectile(&mut self, position: Vec2f, goal: Vec2f, team: u8) {
+        let projectile = Projectile::new(position, Some(goal), 9, 0.1, team);
         self.projectiles.push(projectile);
     }
 }
