@@ -1,5 +1,5 @@
 use crate::entity::Entity;
-use crate::vec::Vec2f;
+use crate::vec::{Vec2f, Vec2i};
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::rc::Rc;
@@ -77,20 +77,19 @@ impl EntityContainer {
                 }
             }
         }
-        // for (area, entities) in self.entities_by_area.iter() {
-        //     println!("Area {:?} has {} entities", area, entities.len());
-        // }
     }
 
-    pub fn entities_in_radius(
+    pub fn entities_in_box(
         &self,
-        position: &Vec2f,
-        max_radius: f32,
+        top_left: &Vec2f,
+        bottom_right: &Vec2f,
+        filter_team: Option<u8>,
+        filter_not_team: Option<u8>,
     ) -> Vec<Rc<RefCell<Entity>>> {
-        let min_x = (position.x - max_radius) as i32 / self.area_divider as i32;
-        let max_x = (position.x + max_radius) as i32 / self.area_divider as i32;
-        let min_y = (position.y - max_radius) as i32 / self.area_divider as i32;
-        let max_y = (position.y + max_radius) as i32 / self.area_divider as i32;
+        let min_x = top_left.x as i32 / self.area_divider as i32;
+        let max_x = bottom_right.x as i32 / self.area_divider as i32;
+        let min_y = top_left.y as i32 / self.area_divider as i32;
+        let max_y = bottom_right.y as i32 / self.area_divider as i32;
 
         let mut entities_in_radius: Vec<Rc<RefCell<Entity>>> = Vec::new();
 
@@ -101,41 +100,6 @@ impl EntityContainer {
                         for entity_rc in entities.iter() {
                             let entity = entity_rc.borrow();
                             let entity_position = entity.get_position();
-                            let distance = (entity_position - position.clone()).length();
-                            if distance < max_radius {
-                                entities_in_radius.push(entity_rc.clone());
-                            }
-                        }
-                    }
-                    None => {}
-                }
-            }
-        }
-
-        entities_in_radius
-    }
-
-    pub fn get_closest_entity(
-        &self,
-        position: &Vec2f,
-        max_radius: f32,
-        filter_team: Option<u8>,
-        filter_not_team: Option<u8>,
-    ) -> Option<&Rc<RefCell<Entity>>> {
-        let min_x = (position.x - max_radius) as i32 / self.area_divider as i32;
-        let max_x = (position.x + max_radius) as i32 / self.area_divider as i32;
-        let min_y = (position.y - max_radius) as i32 / self.area_divider as i32;
-        let max_y = (position.y + max_radius) as i32 / self.area_divider as i32;
-
-        let mut closest_distance: f32 = 999999.0;
-        let mut closest_entity: Option<&Rc<RefCell<Entity>>> = None;
-
-        for x in min_x..max_x + 1 {
-            for y in min_y..max_y + 1 {
-                match self.entities_by_area.get(&(x, y)) {
-                    Some(entities) => {
-                        for entity_rc in entities.iter() {
-                            let entity = entity_rc.borrow();
                             let entity_team = entity.get_team();
 
                             if let Some(filter_team) = filter_team {
@@ -149,11 +113,12 @@ impl EntityContainer {
                                 }
                             }
 
-                            let entity_position = entity.get_position();
-                            let distance = (entity_position - position.clone()).length();
-                            if distance < closest_distance && distance < max_radius {
-                                closest_distance = distance;
-                                closest_entity = Some(entity_rc);
+                            if entity_position.x >= top_left.x
+                                && entity_position.x <= bottom_right.x
+                                && entity_position.y >= top_left.y
+                                && entity_position.y <= bottom_right.y
+                            {
+                                entities_in_radius.push(entity_rc.clone());
                             }
                         }
                     }
@@ -162,23 +127,71 @@ impl EntityContainer {
             }
         }
 
-        closest_entity
+        entities_in_radius
     }
 
-    pub fn get_closest_entity_brute_force(
+    pub fn entities_in_radius(
         &self,
         position: &Vec2f,
         max_radius: f32,
-    ) -> Option<&Rc<RefCell<Entity>>> {
-        let mut closest_distance: f32 = 999999.0;
-        let mut closest_entity: Option<&Rc<RefCell<Entity>>> = None;
-        for entity_rc in self.entities_rc.iter() {
+        filter_team: Option<u8>,
+        filter_not_team: Option<u8>,
+    ) -> Vec<Rc<RefCell<Entity>>> {
+        let mut entities_in_radius: Vec<Rc<RefCell<Entity>>> = Vec::new();
+
+        let min_x = position.x - max_radius;
+        let max_x = position.x + max_radius;
+        let min_y = position.y - max_radius;
+        let max_y = position.y + max_radius;
+
+        for entity_rc in self.entities_in_box(
+            &Vec2f::new(min_x, min_y),
+            &Vec2f::new(max_x, max_y),
+            filter_team,
+            filter_not_team,
+        ) {
             let entity = entity_rc.borrow();
+            let entity_position = entity.get_position();
+            let distance = (entity_position - position.clone()).length();
+            if distance < max_radius {
+                entities_in_radius.push(entity_rc.clone());
+            }
+        }
+
+        entities_in_radius
+    }
+
+    pub fn get_closest_entity(
+        &self,
+        position: &Vec2f,
+        max_radius: f32,
+        filter_team: Option<u8>,
+        filter_not_team: Option<u8>,
+    ) -> Option<Rc<RefCell<Entity>>> {
+        let mut closest_distance: f32 = 999999.0;
+        let mut closest_entity: Option<Rc<RefCell<Entity>>> = None;
+
+        for entity_rc in self.entities_in_radius(position, max_radius, filter_team, filter_not_team)
+        {
+            let entity = entity_rc.borrow();
+            let entity_team = entity.get_team();
+
+            if let Some(filter_team) = filter_team {
+                if entity_team != filter_team {
+                    continue;
+                }
+            }
+            if let Some(filter_not_team) = filter_not_team {
+                if entity_team == filter_not_team {
+                    continue;
+                }
+            }
+
             let entity_position = entity.get_position();
             let distance = (entity_position - position.clone()).length();
             if distance < closest_distance && distance < max_radius {
                 closest_distance = distance;
-                closest_entity = Some(entity_rc);
+                closest_entity = Some(entity_rc.clone());
             }
         }
 

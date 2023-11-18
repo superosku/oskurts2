@@ -1,7 +1,7 @@
 use crate::building::Building;
 use crate::building_container::BuildingContainer;
 use crate::camera::Camera;
-use crate::constants::{ENTITY_AMOUNT, GROUND_HEIGHT, GROUND_WIDTH};
+use crate::constants::{ENTITY_AMOUNT, GROUND_HEIGHT, GROUND_WIDTH, SCREEN_HEIGHT, SCREEN_WIDTH};
 use crate::entity::{Entity, EntityType};
 use crate::entity_container::EntityContainer;
 use crate::ground::{Ground, GroundType};
@@ -82,37 +82,6 @@ impl Game {
             projectile_handler: ProjectileHandler::new(),
             debug_path: None,
             path_finder,
-        }
-    }
-
-    pub fn get_closest_entity_pos(&self, position: &Vec2f, max_radius: f32) -> Option<Vec2f> {
-        // match self.entity_container.get_closest_entity(position, max_radius) {
-        //     Some(entity) => {
-        //         let entity = entity.borrow();
-        //         Some(entity.get_position())
-        //     },
-        //     None => None
-        // }
-
-        match (
-            self.entity_container
-                .get_closest_entity(position, max_radius, None, None),
-            self.entity_container
-                .get_closest_entity_brute_force(position, max_radius),
-        ) {
-            (Some(e1), Some(e2)) => {
-                // Chack that e1 and e2 are the same
-                if e1.borrow().get_id() != e2.borrow().get_id() {
-                    println!("e1 and e2 are not the same");
-                }
-
-                Some(e1.borrow().get_position())
-            }
-            (None, None) => None,
-            _ => {
-                println!("This should not happen");
-                None
-            }
         }
     }
 
@@ -242,7 +211,14 @@ impl Game {
             &mut path_builder_3,
         ];
 
-        for entity_ref in self.entity_container.iter_alive() {
+        let (min_x, max_x, min_y, max_y) = self.get_draw_boundaries(camera);
+
+        for entity_ref in self.entity_container.entities_in_box(
+            &Vec2f::new(min_x as f32, min_y as f32),
+            &Vec2f::new(max_x as f32, max_y as f32),
+            None,
+            None,
+        ) {
             let entity = entity_ref.borrow();
             let entity_position = entity.get_position();
 
@@ -385,13 +361,28 @@ impl Game {
         }
     }
 
+    fn get_draw_boundaries(&self, camera: &Camera) -> (i32, i32, i32, i32) {
+        let top_left = camera.screen_to_world(&Vec2f::new(0.0, 0.0));
+        let bottom_right =
+            camera.screen_to_world(&Vec2f::new(SCREEN_WIDTH as f32, SCREEN_HEIGHT as f32));
+
+        let min_x = 0.max(top_left.x as i32);
+        let max_x = self.ground.get_width().min(bottom_right.x as i32 + 1);
+        let min_y = 0.max(top_left.y as i32);
+        let max_y = self.ground.get_height().min(bottom_right.y as i32 + 1);
+
+        (min_x, max_x, min_y, max_y)
+    }
+
     fn draw_ground(&self, dt: &mut DrawTarget, camera: &Camera) {
         let mut ground_path_builder = PathBuilder::new();
         let mut wall_path_builder = PathBuilder::new();
         let mut gold_path_builder = PathBuilder::new();
 
-        for x in 0..self.ground.get_width() {
-            for y in 0..self.ground.get_height() {
+        let (min_x, max_x, min_y, max_y) = self.get_draw_boundaries(camera);
+
+        for x in min_x..max_x {
+            for y in min_y..max_y {
                 let ground_type = self.ground.get_at(x, y);
                 match ground_type {
                     GroundType::Empty | GroundType::Gold => {
@@ -478,44 +469,52 @@ impl Game {
         if let Some(debug_path) = &self.debug_path {
             let mut path_builder = PathBuilder::new();
 
-            for (path_item, direction) in debug_path.borrow().position_datas.iter() {
-                let center_pos = camera.world_to_screen(&Vec2f::new(
-                    path_item.0 as f32 + 0.5,
-                    path_item.1 as f32 + 0.5,
-                ));
+            let (min_x, max_x, min_y, max_y) = self.get_draw_boundaries(camera);
 
-                path_builder.move_to(
-                    center_pos.x - camera.length_to_pixels(direction.x * 0.2),
-                    center_pos.y - camera.length_to_pixels(direction.y * 0.2),
-                );
-                path_builder.line_to(
-                    center_pos.x + camera.length_to_pixels(direction.x * 0.2),
-                    center_pos.y + camera.length_to_pixels(direction.y * 0.2),
-                );
-                path_builder.line_to(
-                    center_pos.x
-                        + camera.length_to_pixels(
-                            direction.x * 0.2 + direction.y * 0.1 - direction.x * 0.1,
-                        ),
-                    center_pos.y
-                        + camera.length_to_pixels(
-                            direction.y * 0.2 - direction.x * 0.1 - direction.y * 0.1,
-                        ),
-                );
-                path_builder.move_to(
-                    center_pos.x + camera.length_to_pixels(direction.x * 0.2),
-                    center_pos.y + camera.length_to_pixels(direction.y * 0.2),
-                );
-                path_builder.line_to(
-                    center_pos.x
-                        + camera.length_to_pixels(
-                            direction.x * 0.2 - direction.y * 0.1 - direction.x * 0.1,
-                        ),
-                    center_pos.y
-                        + camera.length_to_pixels(
-                            direction.y * 0.2 + direction.x * 0.1 - direction.y * 0.1,
-                        ),
-                );
+            let debug_path = debug_path.borrow();
+            for x in min_x..max_x {
+                for y in min_y..max_y {
+                    let path_item = (x, y);
+                    if let Some(direction) = debug_path.position_datas.get(&path_item) {
+                        let center_pos = camera.world_to_screen(&Vec2f::new(
+                            path_item.0 as f32 + 0.5,
+                            path_item.1 as f32 + 0.5,
+                        ));
+
+                        path_builder.move_to(
+                            center_pos.x - camera.length_to_pixels(direction.x * 0.2),
+                            center_pos.y - camera.length_to_pixels(direction.y * 0.2),
+                        );
+                        path_builder.line_to(
+                            center_pos.x + camera.length_to_pixels(direction.x * 0.2),
+                            center_pos.y + camera.length_to_pixels(direction.y * 0.2),
+                        );
+                        path_builder.line_to(
+                            center_pos.x
+                                + camera.length_to_pixels(
+                                    direction.x * 0.2 + direction.y * 0.1 - direction.x * 0.1,
+                                ),
+                            center_pos.y
+                                + camera.length_to_pixels(
+                                    direction.y * 0.2 - direction.x * 0.1 - direction.y * 0.1,
+                                ),
+                        );
+                        path_builder.move_to(
+                            center_pos.x + camera.length_to_pixels(direction.x * 0.2),
+                            center_pos.y + camera.length_to_pixels(direction.y * 0.2),
+                        );
+                        path_builder.line_to(
+                            center_pos.x
+                                + camera.length_to_pixels(
+                                    direction.x * 0.2 - direction.y * 0.1 - direction.x * 0.1,
+                                ),
+                            center_pos.y
+                                + camera.length_to_pixels(
+                                    direction.y * 0.2 + direction.x * 0.1 - direction.y * 0.1,
+                                ),
+                        );
+                    }
+                }
             }
 
             let path = path_builder.finish();
@@ -681,7 +680,7 @@ impl Game {
 
             for entity in self
                 .entity_container
-                .entities_in_radius(&entity1_position, 2.0)
+                .entities_in_radius(&entity1_position, 2.0, None, None)
                 .iter()
             {
                 if entity.borrow().get_id() == entity1.borrow().get_id() {

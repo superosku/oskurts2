@@ -97,7 +97,7 @@ impl Entity {
     }
 
     pub fn take_damage(&mut self, damage: i32) {
-        println!("Taking damage! {}", self.health);
+        // println!("Taking damage! {}", self.health);
         self.health -= damage;
     }
 
@@ -408,7 +408,7 @@ impl Entity {
 
     pub fn update(
         &mut self,
-        closest_enemy: Option<&Rc<RefCell<Entity>>>,
+        closest_enemy: Option<Rc<RefCell<Entity>>>,
         projectile_handler: &mut ProjectileHandler,
         debug_path: &Option<Rc<RefCell<Path>>>,
     ) {
@@ -418,7 +418,7 @@ impl Entity {
         match &mut cloned_action {
             EntityAction::Idle => {
                 if let Some(closest_enemy) = closest_enemy {
-                    self.interact_with_closest_enemy(closest_enemy, projectile_handler);
+                    self.interact_with_closest_enemy(&closest_enemy, projectile_handler);
                 } else {
                 }
             }
@@ -437,7 +437,7 @@ impl Entity {
                     // self.action = EntityAction::Idle;
                 } else {
                     if let Some(closest_enemy) = closest_enemy {
-                        self.interact_with_closest_enemy(closest_enemy, projectile_handler);
+                        self.interact_with_closest_enemy(&closest_enemy, projectile_handler);
                     } else {
                         self.move_towards_path(goal.path.clone(), &goal.position);
                         // self.move_towards_goal(&goal.position.clone());
