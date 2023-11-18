@@ -29,12 +29,12 @@ impl Game {
         let mut entities: Vec<Entity> = Vec::new();
 
         // Spawn 10 entities at random positions in the range of -10, 10
-        // for _ in 0..ENTITY_AMOUNT {
-        //     let mut rng = rand::thread_rng();
-        //     let x = rng.gen_range(1.0..GROUND_WIDTH as f32 - 1.0);
-        //     let y = rng.gen_range(1.0..GROUND_HEIGHT as f32 - 1.0);
-        //     entities.push(Entity::new(Vec2f::new(x, y)));
-        // }
+        for _ in 0..ENTITY_AMOUNT {
+            let mut rng = rand::thread_rng();
+            let x = rng.gen_range(1.0..GROUND_WIDTH as f32 - 1.0);
+            let y = rng.gen_range(1.0..GROUND_HEIGHT as f32 - 1.0);
+            entities.push(Entity::new(Vec2f::new(x, y)));
+        }
 
         for i in 0..20 {
             entities.push(Entity::new_params(
@@ -73,13 +73,6 @@ impl Game {
         let start_time = Instant::now();
 
         let mut path_finder = PathFinder::new();
-        // let debug_path =
-        //     path_finder.find_path(&ground, Vec2i::new(2, 2), 3, 3, vec![Vec2i::new(10, 10)]);
-        // if let Some(path) = &debug_path {
-        //     for _ in 0..0 {
-        //         path.borrow_mut().do_orienting_round();
-        //     }
-        // }
 
         let total_time = start_time.elapsed().as_millis();
 

@@ -9,6 +9,7 @@ use crate::vec::Vec2f;
 use crate::constants::{SCREEN_HEIGHT, SCREEN_WIDTH};
 use crate::ground::GroundType;
 use pixels::{Pixels, SurfaceTexture};
+use winit::event_loop::ControlFlow;
 use winit::keyboard::KeyCode;
 use winit::{
     dpi::LogicalSize, event::Event, event::WindowEvent, event_loop::EventLoop,
@@ -34,6 +35,8 @@ fn main() {
     println!("Hello, world!");
 
     let event_loop = EventLoop::new().unwrap();
+    event_loop.set_control_flow(ControlFlow::Poll);
+
     let mut input = WinitInputHelper::new();
 
     let window = {
@@ -64,6 +67,9 @@ fn main() {
 
     let mut last_frame_time = Instant::now();
     let mut last_second_fpses: Vec<f32> = Vec::new();
+    let mut update_timer = Instant::now();
+    let mut last_update_time = Instant::now();
+    let mut last_seconds_upses: Vec<f32> = Vec::new();
 
     let mut drag_start_pos: Option<Vec2f> = None;
     let mut drag_pos: Option<Vec2f> = None;
@@ -76,6 +82,18 @@ fn main() {
 
     event_loop
         .run(move |event, window_target| {
+            let now = Instant::now();
+
+            let average_fps =
+                last_second_fpses.iter().sum::<f32>() / last_second_fpses.len() as f32;
+            let average_ups =
+                last_seconds_upses.iter().sum::<f32>() / last_seconds_upses.len() as f32;
+
+            window.set_title(&format!(
+                "Rts2 - FPS: {} UPS: {}",
+                average_fps as i32, average_ups as i32
+            ));
+
             match &event {
                 Event::WindowEvent {
                     window_id,
@@ -86,6 +104,14 @@ fn main() {
                             window_target.exit();
                         }
                         WindowEvent::RedrawRequested => {
+                            let frame_time = now - last_frame_time;
+                            last_frame_time = now;
+                            let current_fps = 1.0 / frame_time.as_secs_f32();
+                            last_second_fpses.push(current_fps);
+                            if last_second_fpses.len() > 60 {
+                                last_second_fpses.remove(0);
+                            }
+
                             let draw_start = Instant::now();
 
                             dt.clear(SolidSource::from_unpremultiplied_argb(
@@ -136,6 +162,8 @@ fn main() {
                             pixels.render().unwrap();
 
                             draw_time = Instant::now() - draw_start;
+
+                            window.request_redraw();
                         }
                         _ => {}
                     }
@@ -144,19 +172,6 @@ fn main() {
             }
 
             if input.update(&event) {
-                let now = Instant::now();
-                let frame_time = now - last_frame_time;
-                last_frame_time = now;
-
-                let current_fps = 1.0 / frame_time.as_secs_f32();
-                last_second_fpses.push(current_fps);
-                if last_second_fpses.len() > 60 {
-                    last_second_fpses.remove(0);
-                }
-                let average_fps =
-                    last_second_fpses.iter().sum::<f32>() / last_second_fpses.len() as f32;
-                window.set_title(&format!("Rts2 - FPS: {}", average_fps));
-
                 if input.key_held(KeyCode::KeyA) {
                     camera.move_position(&Vec2f::new(-1.0, 0.0));
                 }
@@ -258,11 +273,28 @@ fn main() {
                     }
                 }
 
-                let game_update_start = Instant::now();
-                game.update();
-                game_update_time = Instant::now() - game_update_start;
+                let ups_dur = Duration::from_secs_f32(1.0 / 60.0);
 
-                window.request_redraw();
+                let lag = now - update_timer;
+                if lag > Duration::from_millis(100) {
+                    println!("LAG: {:?}", lag);
+                }
+
+                if update_timer + ups_dur <= now {
+                    update_timer += ups_dur;
+
+                    let game_update_start = Instant::now();
+                    game.update();
+                    game_update_time = Instant::now() - game_update_start;
+
+                    let mut update_time = now - last_update_time;
+                    last_update_time = now;
+                    let current_ups = 1.0 / update_time.as_secs_f32();
+                    last_seconds_upses.push(current_ups);
+                    if last_seconds_upses.len() > 60 {
+                        last_seconds_upses.remove(0);
+                    }
+                }
             }
         })
         .unwrap();

@@ -501,11 +501,13 @@ impl Entity {
                     if self.distance_to_block(&goal.resource_position.as_vec2i())
                         < self.radius + 0.1
                     {
-                        goal.counter += 1;
-                        if goal.counter > 100 {
-                            // TODO: Decrement resource here
-                            goal.counter = 0;
-                            goal.going_towards_resource = false;
+                        if step_n == 0 {
+                            goal.counter += 1;
+                            if goal.counter > 100 {
+                                // TODO: Decrement resource here
+                                goal.counter = 0;
+                                goal.going_towards_resource = false;
+                            }
                         }
                     } else {
                         self.move_towards_goal(&goal.resource_position.clone(), step_delta);
@@ -514,10 +516,12 @@ impl Entity {
                     if self.distance_to_block(&goal.building_position.as_vec2i())
                         < self.radius + 0.1
                     {
-                        // TODO: This is a dropoff point
-                        // TODO: Increment resource here
-                        goal.counter = 0;
-                        goal.going_towards_resource = true;
+                        if step_n == 0 {
+                            // TODO: This is a dropoff point
+                            // TODO: Increment resource here
+                            goal.counter = 0;
+                            goal.going_towards_resource = true;
+                        }
                     } else {
                         self.move_towards_goal(&goal.building_position.clone(), step_delta);
                     }
