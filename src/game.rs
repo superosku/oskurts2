@@ -2,8 +2,9 @@ use crate::building::Building;
 use crate::building_container::BuildingContainer;
 use crate::camera::Camera;
 use crate::constants::{ENTITY_AMOUNT, GROUND_HEIGHT, GROUND_WIDTH, SCREEN_HEIGHT, SCREEN_WIDTH};
-use crate::entity::{Entity, EntityType};
+use crate::entity::{Entity, EntityType, GatherGoalBuilding};
 use crate::entity_container::EntityContainer;
+use crate::event_handler::{Event, EventHandler};
 use crate::ground::{Ground, GroundType};
 use crate::path_finder::{Path, PathFinder};
 use crate::projectile_handler::ProjectileHandler;
@@ -664,7 +665,7 @@ impl Game {
                 if is_gather_command {
                     entity
                         .borrow_mut()
-                        .set_action_gather(&goal_pos, &Vec2f::new(5.0, 5.0), 0);
+                        .set_action_gather(&goal_pos, 0, Some(found_path.clone()));
                 } else if is_attack_command {
                     entity.borrow_mut().set_action_attack(
                         found_path.clone(),
@@ -716,14 +717,17 @@ impl Game {
         let steps = 8;
         let step_delta = 1.0 / steps as f32;
 
+        let mut event_handler = EventHandler::new();
+
         for step_n in 0..steps {
             for (entity1, closest_enemy, close_entities) in entity_close.iter() {
                 // Update entities
                 entity1.borrow_mut().update(
                     closest_enemy.clone(),
-                    &mut self.projectile_handler,
+                    // &mut self.projectile_handler,
                     step_n,
                     step_delta,
+                    &mut event_handler,
                 );
 
                 // Entities push each other (Other team)
@@ -768,6 +772,73 @@ impl Game {
 
                 // Flip updated position of each entity (should be done last after each move)
                 entity1.borrow_mut().flip_position();
+            }
+        }
+
+        while let Some(event) = event_handler.events.pop() {
+            match event {
+                Event::AddRangedProjectile { start, end, team } => self
+                    .projectile_handler
+                    .add_ranged_projectile(start, end, team),
+                Event::AddMeleeProjectile { end, team } => {
+                    self.projectile_handler.add_meelee_projectile(end, team)
+                }
+                Event::RequestGatherPath {
+                    entity_id,
+                    going_towards_resource,
+                    resource_position,
+                } => {
+                    let entity_ref = self.entity_container.get_by_id(entity_id);
+                    let entity_position: Vec2i = entity_ref.borrow().get_position().as_vec2i();
+                    let positions: HashSet<Vec2i> =
+                        [entity_position.clone()].iter().cloned().collect();
+                    let entity_team = entity_ref.borrow().get_team();
+
+                    if going_towards_resource {
+                        let path = self.path_finder.find_path(
+                            &self.ground,
+                            resource_position,
+                            1,
+                            1,
+                            &positions,
+                        );
+                        entity_ref.borrow_mut().update_path(path.clone(), None);
+                        self.debug_path = path.clone();
+                        println!("Found path towards the resource {}", path.is_some());
+                    } else {
+                        // TODO: Can not get the closest building like this. Must use path finding instead
+                        if let Some(closest_building) =
+                            self.building_container.get_closest_building(
+                                // let closest_building: &Building = self.building_container.get_closest_building(
+                                &entity_position,
+                                entity_team,
+                            )
+                        {
+                            let path = self.path_finder.find_path(
+                                &self.ground,
+                                closest_building.get_position(),
+                                closest_building.get_width(),
+                                closest_building.get_height(),
+                                &positions,
+                            );
+                            entity_ref.borrow_mut().update_path(
+                                path.clone(),
+                                Some(GatherGoalBuilding::new(
+                                    closest_building.get_position(),
+                                    Vec2i::new(
+                                        closest_building.get_width(),
+                                        closest_building.get_height(),
+                                    ),
+                                )),
+                            );
+                            self.debug_path = path.clone();
+
+                            println!("Found path towards the building {}", path.is_some());
+                        } else {
+                            println!("No path to the building");
+                        }
+                    }
+                }
             }
         }
 

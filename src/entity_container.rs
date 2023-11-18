@@ -23,13 +23,18 @@ impl EntityContainer {
         }
     }
 
+    pub fn get_by_id(&mut self, entity_id: usize) -> &Rc<RefCell<Entity>> {
+        // TODO: Fetch this from hash map and do not iterate through all of the entities
+        self.entities_rc
+            .iter()
+            .filter(|e| e.borrow().get_id() == entity_id)
+            .next()
+            .unwrap()
+    }
+
     pub fn spawn_entity(&mut self, entity: Entity) {
         self.entities_rc.push(Rc::new(RefCell::new(entity)));
     }
-
-    // pub fn iter_all(&self) -> std::slice::Iter<Rc<RefCell<Entity>>> {
-    //     return self.entities_rc.iter();
-    // }
 
     pub fn iter_alive(&self) -> std::slice::Iter<Rc<RefCell<Entity>>> {
         return self.entities_rc.iter();

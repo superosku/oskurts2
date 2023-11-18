@@ -101,7 +101,7 @@ impl Path {
 
     pub fn do_orienting_round(&mut self) {
         let mut new_position_datas: HashMap<PathItem, Vec2f> = HashMap::new();
-        println!("Orienting round");
+        // println!("Orienting round");
 
         for (path_item, direction) in &self.position_datas {
             let (dir_x, dir_y) = get_dirs(direction);
@@ -339,7 +339,6 @@ impl PathFinder {
         start_positions: &HashSet<Vec2i>,
     ) -> Option<Rc<RefCell<Path>>> {
         let mut path_items: HashMap<PathItem, Vec2f> = HashMap::new();
-        // let mut unhandled_positions: Vec<PathItem> = Vec::new();
 
         let mut unfound_start_positions = start_positions.clone();
         let mut current_start_position = match unfound_start_positions.iter().next() {

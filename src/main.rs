@@ -23,6 +23,7 @@ mod camera;
 mod constants;
 mod entity;
 mod entity_container;
+mod event_handler;
 mod game;
 mod game_thing;
 mod ground;
