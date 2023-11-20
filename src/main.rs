@@ -7,6 +7,7 @@ use crate::game::Game;
 use crate::vec::Vec2f;
 
 use crate::constants::{SCREEN_HEIGHT, SCREEN_WIDTH};
+use crate::entity::EntityType;
 use crate::ground::GroundType;
 use pixels::{Pixels, SurfaceTexture};
 use winit::event_loop::ControlFlow;
@@ -30,6 +31,8 @@ mod ground;
 mod path_finder;
 mod projectile;
 mod projectile_handler;
+mod resources;
+mod team;
 mod vec;
 
 fn main() {
@@ -149,6 +152,7 @@ fn main() {
                                 _ => {}
                             }
 
+                            // TODO: This thing can not be the most optimal. How can we directly copy the data?
                             for (dst, &src) in pixels
                                 .frame_mut()
                                 .chunks_exact_mut(4)
@@ -211,13 +215,15 @@ fn main() {
                     let cursor_game_pos =
                         camera.screen_to_world(&Vec2f::new(cursor.0 / scale, cursor.1 / scale));
 
-                    if input.key_pressed_os(KeyCode::KeyQ) {
-                        if let Some(building_id) = selected_building_id {
-                            game.command_building_spawn(building_id);
-                            game.command_building_spawn(building_id);
-                            game.command_building_spawn(building_id);
-                            game.command_building_spawn(building_id);
-                            game.command_building_spawn(building_id);
+                    if let Some(building_id) = selected_building_id {
+                        if input.key_pressed_os(KeyCode::KeyI) {
+                            game.command_building_spawn(building_id, EntityType::Worker);
+                        }
+                        if input.key_pressed_os(KeyCode::KeyO) {
+                            game.command_building_spawn(building_id, EntityType::Ranged);
+                        }
+                        if input.key_pressed_os(KeyCode::KeyP) {
+                            game.command_building_spawn(building_id, EntityType::Melee);
                         }
                     }
 
@@ -256,8 +262,15 @@ fn main() {
 
                                 let top_left = Vec2f::new(p1.x.min(p2.x), p1.y.min(p2.y));
                                 let bottom_right = Vec2f::new(p1.x.max(p2.x), p1.y.max(p2.y));
-                                selected_ids =
+                                let new_selected_ids =
                                     game.entity_ids_in_bounding_box(&top_left, &bottom_right);
+
+                                if input.key_held(KeyCode::ShiftLeft) {
+                                    selected_ids.extend(new_selected_ids);
+                                } else {
+                                    selected_ids = new_selected_ids;
+                                }
+
                                 println!("Selected entities: {:?}", selected_ids);
                                 if selected_ids.len() == 0 {
                                     let building_id = game

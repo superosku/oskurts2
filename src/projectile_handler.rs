@@ -33,11 +33,6 @@ impl ProjectileHandler {
             if projectile.ready_to_impact() {
                 impacting_projectiles.push(projectile);
             }
-            // let projectile_position = projectile.get_position();
-            // let distance = projectile_position.distance_to(&position);
-            // if distance < radius {
-            //     impacting_projectiles.push(projectile.clone());
-            // }
         }
         impacting_projectiles
     }

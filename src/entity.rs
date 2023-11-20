@@ -1,19 +1,23 @@
 use crate::event_handler::{Event, EventHandler};
 use crate::ground::Ground;
-use crate::path_finder::Path;
+use crate::path_finder::{Path, PathFinder, PathGoal};
+use crate::resources::Resources;
 use crate::vec::{Vec2f, Vec2i};
 use std::cell::RefCell;
+use std::collections::HashSet;
 use std::fmt::{Debug, Formatter};
 use std::rc::Rc;
 
+#[derive(Clone, Debug)]
 pub enum EntityType {
-    Meelee,
+    Melee,
     Ranged,
+    Worker,
 }
 
 #[derive(Clone)]
 pub struct Goal {
-    position: Vec2f,
+    // position: Vec2f,
     group_size: f32,
     path: Rc<RefCell<Path>>,
 }
@@ -24,25 +28,25 @@ impl Debug for Goal {
     }
 }
 
-#[derive(Clone)]
-pub struct GatherGoalBuilding {
-    building_position: Vec2i,
-    building_size: Vec2i,
-}
-
-impl GatherGoalBuilding {
-    pub fn new(building_position: Vec2i, building_size: Vec2i) -> GatherGoalBuilding {
-        GatherGoalBuilding {
-            building_position,
-            building_size,
-        }
-    }
-}
+// #[derive(Clone)]
+// pub struct GatherGoalBuilding {
+//     building_position: Vec2i,
+//     building_size: Vec2i,
+// }
+//
+// impl GatherGoalBuilding {
+//     pub fn new(building_position: Vec2i, building_size: Vec2i) -> GatherGoalBuilding {
+//         GatherGoalBuilding {
+//             building_position,
+//             building_size,
+//         }
+//     }
+// }
 
 #[derive(Clone)]
 pub struct GatherGoal {
-    resource_position: Vec2f,
-    building: Option<GatherGoalBuilding>,
+    resource_position: Vec2i,
+    // building: Option<GatherGoalBuilding>,
     resource_type: u8,
     going_towards_resource: bool,
     counter: i32,
@@ -62,6 +66,23 @@ pub enum EntityAction {
     Idle,
     Gather(GatherGoal),
     Hold,
+}
+
+impl EntityAction {
+    pub fn get_path_goal(&self) -> Option<PathGoal> {
+        let path_ref = match self {
+            EntityAction::Move(ref goal) | EntityAction::Attack(ref goal) => &goal.path,
+            EntityAction::Gather(ref goal) => {
+                if let Some(path) = &goal.path {
+                    path
+                } else {
+                    return None;
+                }
+            }
+            _ => return None,
+        };
+        Some(path_ref.borrow().goal.clone())
+    }
 }
 
 pub struct Entity {
@@ -85,8 +106,14 @@ impl Clone for Entity {
 }
 
 impl Entity {
-    pub fn new_params(position: Vec2f, team: u8, radius: f32, entity_type: EntityType) -> Entity {
+    pub fn new_params(position: Vec2f, team: u8, entity_type: EntityType) -> Entity {
         let mut entity = Entity::new(position);
+
+        let radius = match entity_type {
+            EntityType::Melee => 0.35,
+            EntityType::Ranged => 0.4,
+            EntityType::Worker => 0.25,
+        };
 
         entity.team = team;
         entity.radius = radius;
@@ -99,6 +126,24 @@ impl Entity {
         self.health as f32 / self.max_health as f32
     }
 
+    pub fn get_entity_type(&self) -> EntityType {
+        self.entity_type.clone()
+    }
+
+    pub fn refresh_path(&mut self, path_finder: &mut PathFinder, ground: &Ground) {
+        if let Some(path_goal) = self.action.get_path_goal() {
+            let positions: HashSet<Vec2i> = [self.position.as_vec2i()].iter().cloned().collect();
+            let new_path = path_finder.find_path(ground, path_goal, &positions);
+
+            if let Some(path) = new_path {
+                self.update_path(Some(path));
+            } else {
+                println!("Could not find path")
+                // TODO: Should we set the path to null here to avoid infinite calls to path refreshing?
+            }
+        }
+    }
+
     pub fn new(position: Vec2f) -> Entity {
         let random_id = rand::random::<usize>();
         // Radius should be random between 0.25 and 0.5
@@ -107,7 +152,7 @@ impl Entity {
         let random_team = rand::random::<u8>() % 2;
 
         let random_entity_type = if rand::random::<f32>() < 0.5 {
-            EntityType::Meelee
+            EntityType::Melee
         } else {
             EntityType::Ranged
         };
@@ -121,8 +166,8 @@ impl Entity {
             radius: random_radius,
             team: random_team,
             projectile_cooldown: 0,
-            health: 1000,
-            max_health: 1000,
+            health: 100,
+            max_health: 100,
             entity_type: random_entity_type,
         }
     }
@@ -163,7 +208,7 @@ impl Entity {
     pub fn set_action_move(&mut self, path: Rc<RefCell<Path>>, goal: &Vec2f, goal_group_size: f32) {
         self.set_action(EntityAction::Move(Goal {
             path,
-            position: goal.clone(),
+            // position: goal.clone(),
             group_size: goal_group_size,
         }));
     }
@@ -176,21 +221,20 @@ impl Entity {
     ) {
         self.set_action(EntityAction::Attack(Goal {
             path,
-            position: goal.clone(),
+            // position: goal.clone(),
             group_size: goal_group_size,
         }));
     }
 
     pub fn set_action_gather(
         &mut self,
-        resource_position: &Vec2f,
+        resource_position: Vec2i,
         resource_type: u8,
         path: Option<Rc<RefCell<Path>>>,
     ) {
         self.set_action(EntityAction::Gather(GatherGoal {
-            resource_position: resource_position.clone(),
-            building: None,
-            resource_type: resource_type,
+            resource_position,
+            resource_type,
             going_towards_resource: true,
             counter: 0,
             path,
@@ -198,29 +242,49 @@ impl Entity {
     }
 
     pub fn get_goal(&self) -> Option<Vec2f> {
-        match self.action {
-            EntityAction::Move(ref goal) => Some(goal.position.clone()),
-            EntityAction::Attack(ref goal) => Some(goal.position.clone()),
-            // EntityAction::Gather(ref gather_goal) => {
-            //     if gather_goal.going_towards_resource {
-            //         return Some(gather_goal.resource_position.clone());
-            //     }
-            //     return Some(gather_goal.building_position.clone());
-            // }
-            _ => None,
-        }
+        let path_goal = self.action.get_path_goal();
+        // let path_ref = match self.action {
+        //     EntityAction::Move (ref goal) |
+        //     EntityAction::Attack (ref goal) => {
+        //         &goal.path
+        //     }
+        //     EntityAction::Gather(ref goal) => {
+        //         if let Some(path) = &goal.path {
+        //             path
+        //         } else {
+        //             return None
+        //         }
+        //     },
+        //     _ => {
+        //         return None
+        //     }
+        // };
+
+        Some(match path_goal {
+            Some(PathGoal::Rect { pos, size }) => pos.as_vec2f() + size.as_vec2f() / 2.0,
+            Some(PathGoal::Point { pos }) => pos.clone(),
+            None => return None,
+        })
+
+        // Some(match &path_ref.borrow().goal {
+        //     PathGoal::Rect {pos, size} => {
+        //         pos.as_vec2f() + size.as_vec2f() / 2.0
+        //     },
+        //     PathGoal::Point {pos} => {
+        //         pos.clone()
+        //     }
+        // })
     }
 
     pub fn update_path(
         &mut self,
         path: Option<Rc<RefCell<Path>>>,
-        building: Option<GatherGoalBuilding>,
+        // building: Option<GatherGoalBuilding>,
     ) {
         match &mut self.action {
             EntityAction::Gather(ref mut goal) => {
                 goal.path = path;
-                goal.building = building;
-                println!("Path is set {:p}", self);
+                // goal.building = building;
             }
             _ => {
                 println!("update_path called on non gather action (NOT YET IMPLEMENTED)");
@@ -244,7 +308,7 @@ impl Entity {
             println!("Delta length is 0.0");
             let random_value =
                 (self.id & 18446744073709551615) as f32 / 18446744073709551615.0 / 10.0;
-            self.next_position += Vec2f::new(random_value, 0.0);
+            self.next_position += Vec2f::new(random_value, random_value * 0.5);
             return;
         }
 
@@ -366,36 +430,43 @@ impl Entity {
         }
     }
 
+    // // Helper for fn update
+    // fn distance_to_goal(&self, goal: &Vec2f) -> f32 {
+    //     let delta = goal.clone() - self.position.clone();
+    //     delta.length()
+    // }
+    //
+    // fn distance_to_big_block(&self, block: &Vec2i, block_size: &Vec2i) -> f32 {
+    //     let y_diff = if self.position.y < block.y as f32 {
+    //         block.y as f32 - self.position.y
+    //     } else if self.position.y > (block.y + block_size.y) as f32 {
+    //         self.position.y - (block.y + block_size.y) as f32
+    //     } else {
+    //         0.0
+    //     };
+    //
+    //     let x_diff = if self.position.x < block.x as f32 {
+    //         block.x as f32 - self.position.x
+    //     } else if self.position.x > (block.x + block_size.x) as f32 {
+    //         self.position.x - (block.x + block_size.x) as f32
+    //     } else {
+    //         0.0
+    //     };
+    //
+    //     (x_diff * x_diff + y_diff * y_diff).sqrt()
+    // }
+    //
+    // fn distance_to_path_goal(&self, path: &Path) -> f32 {
+    //     match &path.goal {
+    //         PathGoal::Point{pos} => self.distance_to_block(block),
+    //         PathGoal::Rect{pos, size} => self.distance_to_goal(position),
+    //     }
+    // }
+
     // Helper for fn update
-    fn distance_to_goal(&self, goal: &Vec2f) -> f32 {
-        let delta = goal.clone() - self.position.clone();
-        delta.length()
-    }
-
-    fn distance_to_big_block(&self, block: &Vec2i, block_size: &Vec2i) -> f32 {
-        let y_diff = if self.position.y < block.y as f32 {
-            block.y as f32 - self.position.y
-        } else if self.position.y > (block.y + block_size.y) as f32 {
-            self.position.y - (block.y + block_size.y) as f32
-        } else {
-            0.0
-        };
-
-        let x_diff = if self.position.x < block.x as f32 {
-            block.x as f32 - self.position.x
-        } else if self.position.x > (block.x + block_size.x) as f32 {
-            self.position.x - (block.x + block_size.x) as f32
-        } else {
-            0.0
-        };
-
-        (x_diff * x_diff + y_diff * y_diff).sqrt()
-    }
-
-    // Helper for fn update
-    fn distance_to_block(&self, block: &Vec2i) -> f32 {
-        self.distance_to_big_block(block, &Vec2i::new(1, 1))
-    }
+    // fn distance_to_block(&self, block: &Vec2i) -> f32 {
+    //     self.distance_to_big_block(block, &Vec2i::new(1, 1))
+    // }
 
     // Helper for fn update
     fn move_towards_goal(&mut self, goal: &Vec2f, step_delta: f32) {
@@ -403,11 +474,26 @@ impl Entity {
         self.next_position += delta.normalized() * self.speed * step_delta;
     }
 
-    fn move_towards_path(&mut self, path: Rc<RefCell<Path>>, goal: &Vec2f, step_delta: f32) {
-        if self.distance_to_goal(goal) < 1.0 {
-            self.move_towards_goal(goal, step_delta);
-            return;
-        }
+    fn move_towards_path(
+        &mut self,
+        path: Rc<RefCell<Path>>,
+        step_delta: f32,
+        event_handler: &mut EventHandler,
+    ) {
+        let path = path.borrow();
+
+        match &path.goal {
+            PathGoal::Rect { pos, size } => {
+                // TODO: Should perhaps move towards the big block here?
+                // Or is it enough to move towards the path finding arrows instead?
+            }
+            PathGoal::Point { pos } => {
+                if path.distance_to_goal(&self.position) < 1.0 {
+                    self.move_towards_goal(pos, step_delta);
+                    return;
+                }
+            }
+        };
 
         let mut directions: Vec<Vec2f> = Vec::new();
         for i in [
@@ -416,7 +502,7 @@ impl Entity {
             (self.position.clone() + Vec2f::new(self.radius, 0.0)).as_vec2i(),
             (self.position.clone() + Vec2f::new(-self.radius, 0.0)).as_vec2i(),
         ] {
-            if let Some(direction) = path.borrow().get_direction(&i) {
+            if let Some(direction) = path.get_direction(&i) {
                 directions.push(direction);
             }
         }
@@ -428,6 +514,8 @@ impl Entity {
             had_direction = true;
         }
         if !had_direction {
+            println!("Has falleng outside path, requesting a re path...");
+            event_handler.add_event(Event::RequestRePath { entity_id: self.id });
             return;
         }
 
@@ -455,12 +543,15 @@ impl Entity {
 
         let min_range = match self.entity_type {
             EntityType::Ranged => 5.0,
-            EntityType::Meelee => combined_length + 0.1,
+            EntityType::Melee => combined_length + 0.1,
+            EntityType::Worker => {
+                // Workers do not interact with enemies
+                // TODO: Should it run away?
+                return;
+            }
         };
 
         if delta_length > min_range {
-            // self.next_position += delta.normalized() * self.speed * step_delta;
-            // self.move_towards_goal(&delta.normalized(), step_delta);
             if can_move {
                 self.move_towards_goal(&enemy_position, step_delta);
             }
@@ -475,17 +566,97 @@ impl Entity {
                                 team: self.team,
                             });
                         }
-                        EntityType::Meelee => {
+                        EntityType::Melee => {
                             event_handler.add_event(Event::AddMeleeProjectile {
                                 end: closest_enemy.borrow().position.clone(),
                                 team: self.team,
                             });
                         }
+                        EntityType::Worker => {}
                     }
                     self.projectile_cooldown = 100;
                 } else {
                     self.projectile_cooldown -= 1;
                 }
+            }
+        }
+    }
+
+    pub fn handle_gather(
+        &mut self,
+        goal: &mut GatherGoal,
+        step_n: i32,
+        step_delta: f32,
+        event_handler: &mut EventHandler,
+    ) {
+        if let Some(path_ref) = &goal.path {
+            let path = path_ref.borrow();
+            if goal.going_towards_resource {
+                if path.distance_to_goal(&self.position) < self.radius + 0.1 {
+                    // if self.distance_to_block(&goal.resource_position.as_vec2i()) < self.radius + 0.1 {
+                    if step_n == 0 {
+                        goal.counter += 1;
+                        if goal.counter > 200 {
+                            // TODO: Decrement map resource here
+                            goal.counter = 0;
+                            goal.going_towards_resource = false;
+
+                            // println!("Requesting new path");
+                            event_handler.add_event(Event::RequestGatherPath {
+                                entity_id: self.id,
+                                going_towards_resource: false,
+                                resource_position: goal.resource_position.clone(),
+                            })
+                        }
+                    }
+                } else {
+                    if let Some(path) = &goal.path {
+                        // println!("Moving towards path 1");
+                        self.move_towards_path(path.clone(), step_delta, event_handler);
+                    } else {
+                        // I do not think this should happen :thinking:
+                        println!("No path found 1");
+                        // self.move_towards_goal(&goal.resource_position.clone(), step_delta);
+                    }
+                }
+            } else {
+                if path.distance_to_goal(&self.position) < self.radius + 0.1 {
+                    // if let Some(building_data) = goal.building.clone() {
+                    //     if self.distance_to_big_block(
+                    //         &building_data.building_position,
+                    //         &building_data.building_size,
+                    //     ) < self.radius + 0.1
+                    //     {
+                    if step_n == 0 {
+                        // TODO: This is a dropoff point
+                        // TODO: Increment resource here
+                        goal.counter = 0;
+                        goal.going_towards_resource = true;
+
+                        event_handler.add_event(Event::RequestGatherPath {
+                            entity_id: self.id,
+                            going_towards_resource: true,
+                            resource_position: goal.resource_position.clone(),
+                        });
+                        event_handler.add_event(Event::IncrementResources {
+                            team: self.team,
+                            amounts: Resources::new(20),
+                        });
+                    }
+                } else {
+                    if let Some(path) = &goal.path {
+                        // self.move_towards_path(path.clone(), &Vec2f::new(-1.0, -1.0), step_delta);
+                        // TODO: What was this -1.0 hack here for?
+                        self.move_towards_path(path.clone(), step_delta, event_handler);
+                    } else {
+                        // I do not think this should happen :thinking:
+                        println!("No path found 2");
+                        // self.move_towards_goal(&goal.resource_position.clone(), step_delta);
+                    }
+                }
+                // } else {
+                //     println!("HMM :(");
+                // }
             }
         }
     }
@@ -505,8 +676,6 @@ impl Entity {
                 if let Some(closest_enemy) = closest_enemy {
                     self.interact_with_closest_enemy(
                         &closest_enemy,
-                        // game.get_projectile_handler(),
-                        // game. projectile_handler,
                         step_n,
                         step_delta,
                         true,
@@ -516,112 +685,51 @@ impl Entity {
                 }
             }
             EntityAction::Move(goal) => {
-                if self.distance_to_goal(&goal.position) < 1.0 * (goal.group_size).sqrt() / 1.5 {
+                if goal.path.borrow().distance_to_goal(&self.position)
+                    < (goal.group_size.sqrt() - (self.radius * 2.0)).max(0.1)
+                {
+                    // println!(
+                    //     "We are done with move {} {} {}",
+                    //     goal.path.borrow().distance_to_goal(&self.position),
+                    //     goal.group_size.sqrt(),
+                    //     self.radius,
+                    // );
+                    // if self.distance_to_goal(&goal.position) < 1.0 * (goal.group_size).sqrt() / 1.5 {
                     cloned_action = EntityAction::Idle;
-                    // self.action = EntityAction::Idle;
                 } else {
-                    // self.move_towards_goal(&goal.position.clone());
-                    self.move_towards_path(goal.path.clone(), &goal.position, step_delta);
+                    // self.move_towards_path(goal.path.clone(), &goal.position, step_delta);
+                    self.move_towards_path(goal.path.clone(), step_delta, event_handler);
                 }
             }
             EntityAction::Attack(goal) => {
-                if self.distance_to_goal(&goal.position) < 1.0 * (goal.group_size).sqrt() / 2.0 {
+                if goal.path.borrow().distance_to_goal(&self.position)
+                    < (goal.group_size.sqrt() - (self.radius * 2.0)).max(0.1)
+                {
+                    println!("We are done with attack move");
+                    // if self.distance_to_goal(&goal.position) < 1.0 * (goal.group_size).sqrt() / 2.0 {
                     cloned_action = EntityAction::Idle;
-                    // self.action = EntityAction::Idle;
                 } else {
                     if let Some(closest_enemy) = closest_enemy {
                         self.interact_with_closest_enemy(
                             &closest_enemy,
-                            // game.get_projectile_handler(),
                             step_n,
                             step_delta,
                             true,
                             event_handler,
                         );
                     } else {
-                        self.move_towards_path(goal.path.clone(), &goal.position, step_delta);
-                        // self.move_towards_goal(&goal.position.clone());
+                        // self.move_towards_path(goal.path.clone(), &goal.position, step_delta);
+                        self.move_towards_path(goal.path.clone(), step_delta, event_handler);
                     }
                 }
             }
             EntityAction::Gather(goal) => {
-                if goal.going_towards_resource {
-                    if self.distance_to_block(&goal.resource_position.as_vec2i())
-                        < self.radius + 0.1
-                    {
-                        if step_n == 0 {
-                            goal.counter += 1;
-                            if goal.counter > 100 {
-                                // goal.path = game.request_path();
-
-                                // TODO: Decrement resource here
-                                goal.counter = 0;
-                                goal.going_towards_resource = false;
-
-                                event_handler.add_event(Event::RequestGatherPath {
-                                    entity_id: self.id,
-                                    going_towards_resource: false,
-                                    resource_position: goal.resource_position.as_vec2i(),
-                                })
-                            }
-                        }
-                    } else {
-                        if let Some(path) = &goal.path {
-                            // println!("Moving towards path 1");
-                            self.move_towards_path(
-                                path.clone(),
-                                &goal.resource_position,
-                                step_delta,
-                            );
-                        } else {
-                            // I do not think this should happen :thinking:
-                            println!("No path found 1");
-                            self.move_towards_goal(&goal.resource_position.clone(), step_delta);
-                        }
-                    }
-                } else {
-                    if let Some(building_data) = goal.building.clone() {
-                        if self.distance_to_big_block(
-                            &building_data.building_position,
-                            &building_data.building_size,
-                        ) < self.radius + 0.1
-                        {
-                            if step_n == 0 {
-                                // TODO: This is a dropoff point
-                                // TODO: Increment resource here
-                                goal.counter = 0;
-                                goal.going_towards_resource = true;
-
-                                event_handler.add_event(Event::RequestGatherPath {
-                                    entity_id: self.id,
-                                    going_towards_resource: true,
-                                    resource_position: goal.resource_position.as_vec2i(),
-                                })
-                            }
-                        } else {
-                            if let Some(path) = &goal.path {
-                                // println!("Moving towards path 2 {:p}", self);
-                                self.move_towards_path(
-                                    path.clone(),
-                                    &Vec2f::new(-1.0, -1.0),
-                                    step_delta,
-                                );
-                            } else {
-                                // I do not think this should happen :thinking:
-                                println!("No path found 2");
-                                self.move_towards_goal(&goal.resource_position.clone(), step_delta);
-                            }
-                        }
-                    } else {
-                        println!("HMM :(");
-                    }
-                }
+                self.handle_gather(goal, step_n, step_delta, event_handler);
             }
             EntityAction::Hold => {
                 if let Some(closest_enemy) = closest_enemy {
                     self.interact_with_closest_enemy(
                         &closest_enemy,
-                        // game.get_projectile_handler(),
                         step_n,
                         step_delta,
                         false,

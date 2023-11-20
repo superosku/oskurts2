@@ -2,15 +2,17 @@ use crate::building::Building;
 use crate::building_container::BuildingContainer;
 use crate::camera::Camera;
 use crate::constants::{ENTITY_AMOUNT, GROUND_HEIGHT, GROUND_WIDTH, SCREEN_HEIGHT, SCREEN_WIDTH};
-use crate::entity::{Entity, EntityType, GatherGoalBuilding};
+use crate::entity::{Entity, EntityType};
 use crate::entity_container::EntityContainer;
 use crate::event_handler::{Event, EventHandler};
 use crate::ground::{Ground, GroundType};
-use crate::path_finder::{Path, PathFinder};
+use crate::path_finder::{Path, PathFinder, PathGoal};
 use crate::projectile_handler::ProjectileHandler;
+use crate::resources::Resources;
+use crate::team::Team;
 use crate::vec::{Vec2f, Vec2i};
 use rand::Rng;
-use raqote::{DrawOptions, DrawTarget, PathBuilder, SolidSource, Source};
+use raqote::{DrawOptions, DrawTarget, PathBuilder, Point, SolidSource, Source};
 use std::cell::RefCell;
 use std::collections::HashSet;
 use std::rc::Rc;
@@ -23,6 +25,7 @@ pub struct Game {
     projectile_handler: ProjectileHandler,
     path_finder: PathFinder,
     pub debug_path: Option<Rc<RefCell<Path>>>,
+    teams: Vec<Team>,
 }
 
 impl Game {
@@ -41,8 +44,7 @@ impl Game {
             entities.push(Entity::new_params(
                 Vec2f::new(3.0 + i as f32 / 1000.0, 3.0 + i as f32 / 1000.0),
                 0,
-                0.3,
-                EntityType::Meelee,
+                EntityType::Melee,
             ))
         }
 
@@ -79,6 +81,8 @@ impl Game {
 
         println!("Time to find path: {}ms", total_time);
 
+        let teams = vec![Team::new(0), Team::new(1)];
+
         Game {
             entity_container,
             building_container,
@@ -86,6 +90,7 @@ impl Game {
             projectile_handler: ProjectileHandler::new(),
             debug_path: None,
             path_finder,
+            teams,
         }
     }
 
@@ -200,8 +205,7 @@ impl Game {
     fn draw_entities(&self, dt: &mut DrawTarget, camera: &Camera, selected_entiy_ids: &Vec<usize>) {
         let mut selection_path_builder = PathBuilder::new();
         let mut goal_path = PathBuilder::new();
-
-        // let mut path_builder = PathBuilder::new();
+        let mut entity_type_path_builder = PathBuilder::new();
 
         let mut path_builder_0 = PathBuilder::new();
         let mut path_builder_1 = PathBuilder::new();
@@ -240,6 +244,41 @@ impl Game {
                 0.0,
                 2.0 * std::f32::consts::PI,
             );
+
+            let delt = camera.length_to_pixels(radius) * 0.5;
+
+            match entity.get_entity_type() {
+                EntityType::Ranged => {
+                    entity_type_path_builder.move_to(draw_pos.x, draw_pos.y - delt);
+                    entity_type_path_builder
+                        .line_to(draw_pos.x + delt * 0.81, draw_pos.y + delt * 0.58);
+                    entity_type_path_builder
+                        .line_to(draw_pos.x - delt * 0.81, draw_pos.y + delt * 0.58);
+                    entity_type_path_builder.close();
+                }
+                EntityType::Melee => {
+                    entity_type_path_builder
+                        .move_to(draw_pos.x - delt * 0.707, draw_pos.y - delt * 0.707);
+                    entity_type_path_builder
+                        .line_to(draw_pos.x + delt * 0.707, draw_pos.y - delt * 0.707);
+                    entity_type_path_builder
+                        .line_to(draw_pos.x + delt * 0.707, draw_pos.y + delt * 0.707);
+                    entity_type_path_builder
+                        .line_to(draw_pos.x - delt * 0.707, draw_pos.y + delt * 0.707);
+                    entity_type_path_builder.close();
+                }
+                EntityType::Worker => {
+                    entity_type_path_builder
+                        .move_to(draw_pos.x - delt * 0.707, draw_pos.y - delt * 0.2);
+                    entity_type_path_builder
+                        .line_to(draw_pos.x + delt * 0.707, draw_pos.y - delt * 0.2);
+                    entity_type_path_builder
+                        .line_to(draw_pos.x + delt * 0.707, draw_pos.y + delt * 0.2);
+                    entity_type_path_builder
+                        .line_to(draw_pos.x - delt * 0.707, draw_pos.y + delt * 0.2);
+                    entity_type_path_builder.close();
+                }
+            }
 
             if selected_entiy_ids.contains(&entity.get_id()) {
                 if let Some(goal) = entity.get_goal() {
@@ -308,6 +347,14 @@ impl Game {
             &goal_path.finish(),
             &selection_source,
             stroke_style,
+            &DrawOptions::new(),
+        );
+
+        let entity_type_path = entity_type_path_builder.finish();
+        dt.fill(
+            &entity_type_path,
+            &Source::Solid(SolidSource::from_unpremultiplied_argb(255, 255, 255, 255)),
+            // stroke_style,
             &DrawOptions::new(),
         );
 
@@ -543,6 +590,100 @@ impl Game {
         self.draw_buildings(dt, camera, selected_building_id);
         self.draw_projectiles(dt, camera);
         self.draw_debug_path(dt, camera);
+        self.draw_overlay(dt, camera, selected_entiy_ids, selected_building_id);
+    }
+
+    pub fn draw_overlay(
+        &self,
+        dt: &mut DrawTarget,
+        camera: &Camera,
+        selected_entiy_ids: &Vec<usize>,
+        selected_building_id: &Option<usize>,
+    ) {
+        let font = font_kit::loader::Loader::from_file(
+            &mut std::fs::File::open("res/Roboto-Medium.ttf").unwrap(),
+            0,
+        )
+        .unwrap();
+
+        for (i, team) in self.teams.iter().enumerate() {
+            dt.draw_text(
+                &font,
+                20.,
+                &format!("Team {} Gold: {}", team.get_id(), team.get_resources().gold),
+                // "3",
+                Point::new(0., 20. + 20. * i as f32),
+                &Source::Solid(SolidSource::from_unpremultiplied_argb(255, 255, 255, 255)),
+                &DrawOptions::new(),
+            );
+        }
+
+        dt.fill_rect(
+            0.,
+            SCREEN_HEIGHT as f32 - 180.,
+            SCREEN_WIDTH as f32,
+            180.,
+            &Source::Solid(SolidSource::from_unpremultiplied_argb(255, 128, 128, 128)),
+            &DrawOptions::new(),
+        );
+
+        dt.fill_rect(
+            10.,
+            SCREEN_HEIGHT as f32 - 170.,
+            160.,
+            160.,
+            &Source::Solid(SolidSource::from_unpremultiplied_argb(255, 64, 64, 64)),
+            &DrawOptions::new(),
+        );
+
+        dt.draw_text(
+            &font,
+            20.,
+            &format!("Minimap here"),
+            Point::new(10., SCREEN_HEIGHT as f32 - 170. + 20.),
+            &Source::Solid(SolidSource::from_unpremultiplied_argb(255, 255, 255, 255)),
+            &DrawOptions::new(),
+        );
+
+        if let Some(selected_building_id) = selected_building_id {
+            if let Some(building) = self
+                .building_container
+                .get_building_by_id(*selected_building_id)
+            {
+                let spawn_queue = building.get_spawn_queue();
+                let spawn_timer = building.get_spawn_timer();
+                for (i, spawn_item) in spawn_queue.iter().enumerate() {
+                    dt.draw_text(
+                        &font,
+                        20.,
+                        &format!("{:?}", spawn_item),
+                        // "3",
+                        Point::new(180., SCREEN_HEIGHT as f32 - 170. + 20. + 20. * i as f32),
+                        &Source::Solid(SolidSource::from_unpremultiplied_argb(255, 255, 255, 255)),
+                        &DrawOptions::new(),
+                    );
+                }
+                if !spawn_queue.is_empty() {
+                    let spawn_duratoin = building.get_spawn_duration();
+                    dt.fill_rect(
+                        180. + 100.,
+                        SCREEN_HEIGHT as f32 - 170.,
+                        100.,
+                        20.,
+                        &Source::Solid(SolidSource::from_unpremultiplied_argb(255, 64, 64, 64)),
+                        &DrawOptions::new(),
+                    );
+                    dt.fill_rect(
+                        180. + 100.,
+                        SCREEN_HEIGHT as f32 - 170.,
+                        100. * (spawn_timer as f32 / spawn_duratoin as f32),
+                        20.,
+                        &Source::Solid(SolidSource::from_unpremultiplied_argb(255, 0, 255, 0)),
+                        &DrawOptions::new(),
+                    );
+                }
+            }
+        }
     }
 
     pub fn entity_ids_in_bounding_box(&self, top_left: &Vec2f, bottom_right: &Vec2f) -> Vec<usize> {
@@ -581,17 +722,40 @@ impl Game {
         None
     }
 
-    pub fn command_building_spawn(&mut self, building_id: usize) {
-        for building in self.building_container.get_buildings().iter() {
-            if building.get_id() == building_id {
-                self.entity_container.spawn_entity(Entity::new_params(
-                    building.get_spawn_position(),
-                    building.get_team(),
-                    0.25,
-                    EntityType::Ranged,
-                ));
+    fn decrement_team_resources(&mut self, team_id: u8, amount: Resources) -> bool {
+        for team in self.teams.iter_mut() {
+            if team.get_id() == team_id {
+                if team.get_resources().can_afford(&amount) {
+                    team.decrement_resources(&amount);
+                    return true;
+                }
+                return false;
             }
         }
+        return false;
+    }
+
+    pub fn command_building_spawn(&mut self, building_id: usize, entity_type: EntityType) {
+        if let Some(building) = self.building_container.get_building_by_id(building_id) {
+            let team = building.get_team();
+
+            if self.decrement_team_resources(team, Resources::new(80)) {
+                self.building_container
+                    .add_to_building_spawn_queue(building_id, entity_type);
+            }
+        } else {
+            println!("Building with id {} not found", building_id);
+        }
+        // self.building_container.get_building_by_id(building_id).unwrap().add_to_spawn_queue(entity_type);
+        // for building in self.building_container.get_buildings().iter() {
+        //     if building.get_id() == building_id {
+        //         self.entity_container.spawn_entity(Entity::new_params(
+        //             building.get_spawn_position(),
+        //             building.get_team(),
+        //             EntityType::Worker,
+        //         ));
+        //     }
+        // }
     }
 
     pub fn command_entities_simple(
@@ -622,10 +786,6 @@ impl Game {
         goal_pos: &Vec2f,
         is_attack_command: bool,
     ) {
-        // TODO: Define if is gather from map position clicked
-
-        // let mut goals = self.ground.generate_goals(goal_pos, entity_ids.len() as i32);
-
         let is_gather_command = match self.ground.get_pos(goal_pos) {
             GroundType::Gold => true,
             _ => false,
@@ -635,14 +795,23 @@ impl Game {
             .entity_container
             .iter_alive()
             .filter(|entity| entity_ids.contains(&entity.borrow().get_id()))
-            // entity_ids
-            // .iter()
             .map(|entity| entity.borrow().get_position().as_vec2i());
         let entity_positions: HashSet<Vec2i> = HashSet::from_iter(entity_positions_iter);
 
-        let found_path =
-            self.path_finder
-                .find_path(&self.ground, goal_pos.as_vec2i(), 1, 1, &entity_positions);
+        let path_goal = if is_gather_command {
+            PathGoal::Rect {
+                pos: goal_pos.as_vec2i(),
+                size: Vec2i::new(1, 1),
+            }
+        } else {
+            PathGoal::Point {
+                pos: goal_pos.clone(),
+            }
+        };
+
+        let found_path = self
+            .path_finder
+            .find_path(&self.ground, path_goal, &entity_positions);
 
         self.debug_path = found_path.clone();
 
@@ -662,10 +831,18 @@ impl Game {
                 .sum::<f32>();
 
             for entity in entities_commanded {
+                let entity_type = entity.borrow().get_entity_type();
                 if is_gather_command {
-                    entity
-                        .borrow_mut()
-                        .set_action_gather(&goal_pos, 0, Some(found_path.clone()));
+                    match entity_type {
+                        EntityType::Worker => {
+                            entity.borrow_mut().set_action_gather(
+                                goal_pos.as_vec2i(),
+                                0,
+                                Some(found_path.clone()),
+                            );
+                        }
+                        _ => {}
+                    }
                 } else if is_attack_command {
                     entity.borrow_mut().set_action_attack(
                         found_path.clone(),
@@ -714,7 +891,7 @@ impl Game {
             entity_close.push((entity1, closest_enemy, close_entities));
         }
 
-        let steps = 8;
+        let steps = 4;
         let step_delta = 1.0 / steps as f32;
 
         let mut event_handler = EventHandler::new();
@@ -775,6 +952,9 @@ impl Game {
             }
         }
 
+        // Update buildings
+        self.building_container.update_buildings(&mut event_handler);
+
         while let Some(event) = event_handler.events.pop() {
             match event {
                 Event::AddRangedProjectile { start, end, team } => self
@@ -797,14 +977,14 @@ impl Game {
                     if going_towards_resource {
                         let path = self.path_finder.find_path(
                             &self.ground,
-                            resource_position,
-                            1,
-                            1,
+                            PathGoal::Rect {
+                                pos: resource_position,
+                                size: Vec2i::new(1, 1),
+                            },
                             &positions,
                         );
-                        entity_ref.borrow_mut().update_path(path.clone(), None);
+                        entity_ref.borrow_mut().update_path(path.clone());
                         self.debug_path = path.clone();
-                        println!("Found path towards the resource {}", path.is_some());
                     } else {
                         // TODO: Can not get the closest building like this. Must use path finding instead
                         if let Some(closest_building) =
@@ -816,28 +996,59 @@ impl Game {
                         {
                             let path = self.path_finder.find_path(
                                 &self.ground,
-                                closest_building.get_position(),
-                                closest_building.get_width(),
-                                closest_building.get_height(),
+                                PathGoal::Rect {
+                                    pos: closest_building.get_position(),
+                                    size: Vec2i::new(
+                                        closest_building.get_width(),
+                                        closest_building.get_height(),
+                                    ),
+                                },
                                 &positions,
                             );
                             entity_ref.borrow_mut().update_path(
                                 path.clone(),
-                                Some(GatherGoalBuilding::new(
-                                    closest_building.get_position(),
-                                    Vec2i::new(
-                                        closest_building.get_width(),
-                                        closest_building.get_height(),
-                                    ),
-                                )),
+                                // Some(GatherGoalBuilding::new(
+                                //     closest_building.get_position(),
+                                //     Vec2i::new(
+                                //         closest_building.get_width(),
+                                //         closest_building.get_height(),
+                                //     ),
+                                // )),
                             );
                             self.debug_path = path.clone();
-
-                            println!("Found path towards the building {}", path.is_some());
                         } else {
                             println!("No path to the building");
                         }
                     }
+                }
+                Event::IncrementResources { team, amounts } => {
+                    let team = self
+                        .teams
+                        .iter_mut()
+                        .filter(|t| t.get_id() == team)
+                        .next()
+                        .unwrap();
+                    team.increment_resources(&amounts);
+                }
+                Event::SpawnEntity {
+                    entity_type,
+                    position,
+                    team,
+                } => {
+                    self.entity_container.spawn_entity(Entity::new_params(
+                        position,
+                        team,
+                        entity_type,
+                    ));
+
+                    println!("Spwaning an entity");
+                }
+                Event::RequestRePath { entity_id } => {
+                    let entity_ref = self.entity_container.get_by_id(entity_id);
+                    let mut entity = entity_ref.borrow_mut();
+
+                    println!("Rep pathing request handler");
+                    entity.refresh_path(&mut self.path_finder, &self.ground);
                 }
             }
         }

@@ -7,8 +7,35 @@ use std::rc::Rc;
 
 type PathItem = (i32, i32);
 
+#[derive(Clone)]
+pub enum PathGoal {
+    Point { pos: Vec2f },
+    Rect { pos: Vec2i, size: Vec2i },
+}
+
 pub struct Path {
     pub position_datas: HashMap<PathItem, Vec2f>,
+    pub goal: PathGoal,
+}
+
+fn distance_to_big_block(entity_pos: &Vec2f, pos: &Vec2i, size: &Vec2i) -> f32 {
+    let y_diff = if entity_pos.y < pos.y as f32 {
+        pos.y as f32 - entity_pos.y
+    } else if entity_pos.y > (pos.y + size.y) as f32 {
+        entity_pos.y - (pos.y + size.y) as f32
+    } else {
+        0.0
+    };
+
+    let x_diff = if entity_pos.x < pos.x as f32 {
+        pos.x as f32 - entity_pos.x
+    } else if entity_pos.x > (pos.x + size.x) as f32 {
+        entity_pos.x - (pos.x + size.x) as f32
+    } else {
+        0.0
+    };
+
+    (x_diff * x_diff + y_diff * y_diff).sqrt()
 }
 
 fn get_dirs(direction: &Vec2f) -> (i32, i32) {
@@ -87,8 +114,11 @@ fn get_two_lines_intersection(
 }
 
 impl Path {
-    pub fn new(position_datas: HashMap<PathItem, Vec2f>) -> Path {
-        Path { position_datas }
+    pub fn new(position_datas: HashMap<PathItem, Vec2f>, goal: PathGoal) -> Path {
+        Path {
+            position_datas,
+            goal,
+        }
     }
 
     pub fn get_direction(&self, position: &Vec2i) -> Option<Vec2f> {
@@ -97,6 +127,23 @@ impl Path {
             Some(direction) => Some(direction.clone()),
             None => None,
         }
+    }
+
+    pub fn distance_to_goal(&self, goal: &Vec2f) -> f32 {
+        let distance = match &self.goal {
+            PathGoal::Point { pos } => {
+                let res = (pos.clone() - goal.clone()).length();
+                // println!("Distance to point is {}", res);
+                res
+            }
+            PathGoal::Rect { pos, size } => {
+                let res = distance_to_big_block(goal, pos, size);
+                // println!("Distance to rect is {}", res);
+                res
+            }
+        };
+        // println!("Distance is {}", distance);
+        distance
     }
 
     pub fn do_orienting_round(&mut self) {
@@ -277,7 +324,7 @@ impl Path {
 }
 
 pub struct PathFinder {
-    paths: Vec<Rc<RefCell<Path>>>,
+    // paths: Vec<Rc<RefCell<Path>>>,
 }
 
 #[derive(Copy, Clone, Eq, PartialEq)]
@@ -327,15 +374,18 @@ impl PartialOrd for WPathItem {
 
 impl PathFinder {
     pub fn new() -> PathFinder {
-        PathFinder { paths: Vec::new() }
+        PathFinder {
+            // paths: Vec::new()
+        }
     }
 
     pub fn find_path(
         &mut self,
         ground: &Ground,
-        goal: Vec2i,
-        goal_width: i32,
-        goal_height: i32,
+        goal: PathGoal,
+        // goal: Vec2i,
+        // goal_width: i32,
+        // goal_height: i32,
         start_positions: &HashSet<Vec2i>,
     ) -> Option<Rc<RefCell<Path>>> {
         let mut path_items: HashMap<PathItem, Vec2f> = HashMap::new();
@@ -348,29 +398,34 @@ impl PathFinder {
 
         let mut unhandled_positions: BinaryHeap<WPathItem> = BinaryHeap::new();
 
+        let (goal_pos, goal_height, goal_width) = match &goal {
+            PathGoal::Point { pos } => (pos.as_vec2i(), 1, 1),
+            PathGoal::Rect { pos, size } => (pos.clone(), size.y, size.x),
+        };
+
         for i in 0..goal_height {
-            if !ground.blocked_at(goal.x - 1, goal.y + i) {
-                let pos = (goal.x - 1, goal.y + i);
+            if !ground.blocked_at(goal_pos.x - 1, goal_pos.y + i) {
+                let pos = (goal_pos.x - 1, goal_pos.y + i);
                 path_items.insert(pos, Vec2f::new(1.0, 0.0));
                 unhandled_positions.push(WPathItem::new(pos, 0, &current_start_position));
                 unfound_start_positions.remove(&Vec2i::new(pos.0, pos.1));
             }
-            if !ground.blocked_at(goal.x + goal_width, goal.y + i) {
-                let pos = (goal.x + goal_width, goal.y + i);
+            if !ground.blocked_at(goal_pos.x + goal_width, goal_pos.y + i) {
+                let pos = (goal_pos.x + goal_width, goal_pos.y + i);
                 path_items.insert(pos, Vec2f::new(-1.0, 0.0));
                 unhandled_positions.push(WPathItem::new(pos, 0, &current_start_position));
                 unfound_start_positions.remove(&Vec2i::new(pos.0, pos.1));
             }
         }
         for i in 0..goal_width {
-            if !ground.blocked_at(goal.x + i, goal.y - 1) {
-                let pos = (goal.x + i, goal.y - 1);
+            if !ground.blocked_at(goal_pos.x + i, goal_pos.y - 1) {
+                let pos = (goal_pos.x + i, goal_pos.y - 1);
                 path_items.insert(pos, Vec2f::new(0.0, 1.0));
                 unhandled_positions.push(WPathItem::new(pos, 0, &current_start_position));
                 unfound_start_positions.remove(&Vec2i::new(pos.0, pos.1));
             }
-            if !ground.blocked_at(goal.x + i, goal.y + goal_height) {
-                let pos = (goal.x + i, goal.y + goal_height);
+            if !ground.blocked_at(goal_pos.x + i, goal_pos.y + goal_height) {
+                let pos = (goal_pos.x + i, goal_pos.y + goal_height);
                 path_items.insert(pos, Vec2f::new(0.0, -1.0));
                 unhandled_positions.push(WPathItem::new(pos, 0, &current_start_position));
                 unfound_start_positions.remove(&Vec2i::new(pos.0, pos.1));
@@ -428,7 +483,7 @@ impl PathFinder {
                     unfound_start_positions.remove(&new_position_vec);
 
                     if unfound_start_positions.is_empty() {
-                        println!("Found all paths!");
+                        // println!("Found all paths!");
                         break 'outer;
                     }
 
@@ -464,7 +519,7 @@ impl PathFinder {
             position_index += 1;
         }
 
-        let mut path = Path::new(path_items);
+        let mut path = Path::new(path_items, goal);
         path.do_orienting_round();
         path.do_orienting_round();
         path.do_orienting_round();
@@ -472,9 +527,21 @@ impl PathFinder {
         path.do_orienting_round();
 
         let path_ref = Rc::new(RefCell::new(path));
-        self.paths.push(path_ref.clone());
+        // self.paths.push(path_ref.clone());
+        // self.print_path_info();
         Some(path_ref)
     }
+    //
+    // fn print_path_info(&self) {
+    //     let list: Vec<String> = self.paths.iter().map(|p| {
+    //         format!(
+    //             "({} {})",
+    //             Rc::strong_count(&p),
+    //             Rc::weak_count(&p),
+    //         )
+    //     }).collect();
+    //     println!("Path ref counts: {:?}", list);
+    // }
 
     pub fn find_path_simple(
         &mut self,
@@ -484,6 +551,12 @@ impl PathFinder {
     ) -> Option<Rc<RefCell<Path>>> {
         let mut start_positions = HashSet::new();
         start_positions.insert(start);
-        self.find_path(ground, goal, 1, 1, &start_positions)
+        self.find_path(
+            ground,
+            PathGoal::Point {
+                pos: goal.as_vec2f() + Vec2f::new(0.5, 0.5),
+            },
+            &start_positions,
+        )
     }
 }

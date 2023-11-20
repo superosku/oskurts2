@@ -1,3 +1,5 @@
+use crate::entity::EntityType;
+use crate::resources::Resources;
 use crate::vec::{Vec2f, Vec2i};
 
 pub enum Event {
@@ -14,6 +16,18 @@ pub enum Event {
         entity_id: usize,
         going_towards_resource: bool,
         resource_position: Vec2i,
+    },
+    IncrementResources {
+        team: u8,
+        amounts: Resources,
+    },
+    SpawnEntity {
+        entity_type: EntityType,
+        position: Vec2f,
+        team: u8,
+    },
+    RequestRePath {
+        entity_id: usize,
     },
 }
 
