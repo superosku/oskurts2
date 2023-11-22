@@ -3,7 +3,7 @@ use crate::building_container::BuildingContainer;
 use crate::camera::Camera;
 use crate::constants::{ENTITY_AMOUNT, GROUND_HEIGHT, GROUND_WIDTH, SCREEN_HEIGHT, SCREEN_WIDTH};
 use crate::draw::draw_health_bar;
-use crate::entity::{Entity, EntityType};
+use crate::entity::{BuildGoal, Entity, EntityAction, EntityType};
 use crate::entity_container::EntityContainer;
 use crate::event_handler::{Event, EventHandler};
 use crate::ground::{Ground, GroundType};
@@ -68,9 +68,16 @@ impl Game {
             ground.set_at(GROUND_WIDTH - 9 + i, GROUND_HEIGHT - 4, GroundType::Gold);
         }
         let mut building_container = BuildingContainer::new();
-        building_container.add_building(Building::new(Vec2i::new(8, 8), 2, 3, 0), &mut ground);
+        building_container
+            .add_building(Building::new(Vec2i::new(8, 8), 2, 3, 0, true), &mut ground);
         building_container.add_building(
-            Building::new(Vec2i::new(GROUND_WIDTH - 8, GROUND_HEIGHT - 8), 3, 2, 1),
+            Building::new(
+                Vec2i::new(GROUND_WIDTH - 8, GROUND_HEIGHT - 8),
+                3,
+                2,
+                1,
+                true,
+            ),
             &mut ground,
         );
 
@@ -129,13 +136,15 @@ impl Game {
         camera: &Camera,
         selected_building_id: &Option<usize>,
     ) {
-        for building in self.building_container.get_buildings().iter() {
+        for building_ref in self.building_container.get_buildings().iter() {
+            let building = building_ref.borrow();
+
             let mut path_builder = PathBuilder::new();
             let mut selection_path_builder = PathBuilder::new();
 
-            let position = building.borrow().get_position();
-            let width = building.borrow().get_width();
-            let height = building.borrow().get_height();
+            let position = building.get_position();
+            let width = building.get_width();
+            let height = building.get_height();
 
             let draw_pos = camera.world_to_screen(&Vec2f::new(
                 position.x as f32 + 0.1,
@@ -156,7 +165,7 @@ impl Game {
             );
             path_builder.close();
 
-            let source = if building.borrow().get_team() == 0 {
+            let source = if building.get_team() == 0 {
                 Source::Solid(SolidSource::from_unpremultiplied_argb(
                     255, 0x7d, 0xde, 0x92,
                 ))
@@ -166,10 +175,24 @@ impl Game {
                 ))
             };
 
-            dt.fill(&path_builder.finish(), &source, &DrawOptions::new());
+            if building.is_constructed() {
+                dt.fill(&path_builder.finish(), &source, &DrawOptions::new());
+            } else {
+                dt.stroke(
+                    &path_builder.finish(),
+                    &source,
+                    &mut raqote::StrokeStyle::default(),
+                    // stroke_style,
+                    &DrawOptions::new(),
+                    //     &selection_path,
+                    // &selection_source,
+                    // stroke_style,
+                    // &DrawOptions::new(),
+                );
+            }
 
             if let Some(selected_building_id) = selected_building_id {
-                if *selected_building_id == building.borrow().get_id() {
+                if *selected_building_id == building.get_id() {
                     let selection_draw_pos =
                         camera.world_to_screen(&Vec2f::new(position.x as f32, position.y as f32));
                     selection_path_builder.move_to(selection_draw_pos.x, selection_draw_pos.y);
@@ -201,17 +224,21 @@ impl Game {
                 }
             }
 
-            let health_ratio = building.borrow().health.health_ratio();
+            let health_ratio = if building.is_constructed() {
+                building.health.health_ratio()
+            } else {
+                building.construction_progress.health_ratio()
+            };
             draw_health_bar(
                 dt,
                 camera,
                 health_ratio,
-                &(building.borrow().get_position().as_vec2f()
+                &(building.get_position().as_vec2f()
                     + Vec2f::new(
-                        building.borrow().get_width() as f32 / 2.0,
-                        building.borrow().get_height() as f32 + 0.1,
+                        building.get_width() as f32 / 2.0,
+                        building.get_height() as f32 + 0.1,
                     )),
-                building.borrow().get_width() as f32,
+                building.get_width() as f32,
             );
         }
     }
@@ -622,39 +649,56 @@ impl Game {
         );
 
         if let Some(selected_building_id) = selected_building_id {
-            if let Some(building) = self
+            if let Some(building_ref) = self
                 .building_container
                 .get_building_by_id(*selected_building_id)
             {
-                let spawn_queue = building.borrow().get_spawn_queue().clone();
-                let spawn_timer = building.borrow().get_spawn_timer();
-                for (i, spawn_item) in spawn_queue.iter().enumerate() {
+                let building = building_ref.borrow();
+
+                if building.is_constructed() {
+                    let spawn_queue = building.get_spawn_queue().clone();
+                    let spawn_timer = building.get_spawn_timer();
+                    for (i, spawn_item) in spawn_queue.iter().enumerate() {
+                        dt.draw_text(
+                            &font,
+                            20.,
+                            &format!("{:?}", spawn_item),
+                            Point::new(180., SCREEN_HEIGHT as f32 - 170. + 20. + 20. * i as f32),
+                            &Source::Solid(SolidSource::from_unpremultiplied_argb(
+                                255, 255, 255, 255,
+                            )),
+                            &DrawOptions::new(),
+                        );
+                    }
+                    if !spawn_queue.is_empty() {
+                        let spawn_duratoin = building.get_spawn_duration();
+                        dt.fill_rect(
+                            180. + 100.,
+                            SCREEN_HEIGHT as f32 - 170.,
+                            100.,
+                            20.,
+                            &Source::Solid(SolidSource::from_unpremultiplied_argb(255, 64, 64, 64)),
+                            &DrawOptions::new(),
+                        );
+                        dt.fill_rect(
+                            180. + 100.,
+                            SCREEN_HEIGHT as f32 - 170.,
+                            100. * (spawn_timer as f32 / spawn_duratoin as f32),
+                            20.,
+                            &Source::Solid(SolidSource::from_unpremultiplied_argb(255, 0, 255, 0)),
+                            &DrawOptions::new(),
+                        );
+                    }
+                } else {
                     dt.draw_text(
                         &font,
                         20.,
-                        &format!("{:?}", spawn_item),
-                        // "3",
-                        Point::new(180., SCREEN_HEIGHT as f32 - 170. + 20. + 20. * i as f32),
+                        &format!(
+                            "Under construction: {}%",
+                            (building.construction_progress.health_ratio() * 100.0) as i32
+                        ),
+                        Point::new(180., SCREEN_HEIGHT as f32 - 170. + 20. + 20.),
                         &Source::Solid(SolidSource::from_unpremultiplied_argb(255, 255, 255, 255)),
-                        &DrawOptions::new(),
-                    );
-                }
-                if !spawn_queue.is_empty() {
-                    let spawn_duratoin = building.borrow().get_spawn_duration();
-                    dt.fill_rect(
-                        180. + 100.,
-                        SCREEN_HEIGHT as f32 - 170.,
-                        100.,
-                        20.,
-                        &Source::Solid(SolidSource::from_unpremultiplied_argb(255, 64, 64, 64)),
-                        &DrawOptions::new(),
-                    );
-                    dt.fill_rect(
-                        180. + 100.,
-                        SCREEN_HEIGHT as f32 - 170.,
-                        100. * (spawn_timer as f32 / spawn_duratoin as f32),
-                        20.,
-                        &Source::Solid(SolidSource::from_unpremultiplied_argb(255, 0, 255, 0)),
                         &DrawOptions::new(),
                     );
                 }
@@ -761,16 +805,122 @@ impl Game {
             .set_spawn_command_position(building_id, pos);
     }
 
+    pub fn command_construct_building(
+        &mut self,
+        entity_ids: &Vec<usize>,
+        building_top_left: &Vec2i,
+    ) {
+        let mut team_id: Option<u8> = None;
+
+        let mut entities = Vec::new();
+
+        for entity_ref in self.entity_container.iter_alive() {
+            let entity = entity_ref.borrow();
+            if entity_ids.contains(&entity.get_id()) && entity.is_worker() {
+                let entity_team_id = entity.get_team();
+                if let Some(team_id) = team_id {
+                    if team_id != entity_team_id {
+                        println!(
+                            "Cannot command entities from different teams to construct a building"
+                        );
+                        return;
+                    }
+                }
+                team_id = Some(entity_team_id);
+
+                entities.push(entity_ref.clone());
+            }
+        }
+
+        if let Some(team_id) = team_id {
+            for x in 0..2 {
+                for y in 0..2 {
+                    if self
+                        .ground
+                        .blocked_at(building_top_left.x + x, building_top_left.y + y)
+                    {
+                        println!("Cannot construct building on non-empty tile");
+                        return;
+                    }
+                }
+            }
+
+            if self.decrement_team_resources(team_id, Resources::new(100)) {
+                let new_building_width = 2;
+                let new_building_height = 2;
+
+                let new_building_ref = self.building_container.add_building(
+                    Building::new(
+                        building_top_left.clone(),
+                        new_building_width,
+                        new_building_height,
+                        team_id,
+                        false,
+                    ),
+                    &mut self.ground,
+                );
+
+                let new_path = self.path_finder.find_path(
+                    &self.ground,
+                    PathGoal::Rect {
+                        pos: building_top_left.clone(),
+                        size: Vec2i::new(new_building_width, new_building_height),
+                    },
+                    &HashSet::from_iter(
+                        entities
+                            .iter()
+                            .map(|entity| entity.borrow().get_position().as_vec2i()),
+                    ),
+                );
+
+                for entity in entities.iter() {
+                    entity
+                        .borrow_mut()
+                        .set_action_build(new_building_ref.clone(), new_path.clone());
+                    // entity.borrow_mut().set_action_construct_building(new_building_ref.clone());
+                }
+            } else {
+                println!("Not enough resources to construct building");
+            }
+        } else {
+            println!("No entities selected to construct building (that is worker)");
+        }
+    }
+
     pub fn command_entities_move(
         &mut self,
         entity_ids: &Vec<usize>,
         goal_pos: &Vec2f,
         is_attack_command: bool,
     ) {
-        let is_gather_command = match self.ground.get_pos(goal_pos) {
-            GroundType::Gold => true,
-            _ => false,
+        enum MoveGoalType {
+            Move,
+            Attack,
+            Gather,
+            Build(Rc<RefCell<Building>>),
+        }
+
+        // TODO: Make sure only one team entities are selected
+        // TODO: Get the team id and filter buildings by it
+
+        let move_goal_type: MoveGoalType = if is_attack_command {
+            MoveGoalType::Attack
+        } else if self.ground.get_pos(goal_pos) == GroundType::Gold {
+            MoveGoalType::Gather
+        } else if let Some(building) = self.building_container.get_building_at(
+            &goal_pos.as_vec2i(),
+            None, // TODO: Filter here by team id
+            None,
+        ) {
+            MoveGoalType::Build(building)
+        } else {
+            MoveGoalType::Move
         };
+
+        // let is_gather_command = match self.ground.get_pos(goal_pos) {
+        //     GroundType::Gold => true,
+        //     _ => false,
+        // };
 
         let entity_positions_iter = self
             .entity_container
@@ -779,15 +929,21 @@ impl Game {
             .map(|entity| entity.borrow().get_position().as_vec2i());
         let entity_positions: HashSet<Vec2i> = HashSet::from_iter(entity_positions_iter);
 
-        let path_goal = if is_gather_command {
-            PathGoal::Rect {
+        let path_goal = match &move_goal_type {
+            MoveGoalType::Move | MoveGoalType::Attack => PathGoal::Point {
+                pos: goal_pos.clone(),
+            },
+            MoveGoalType::Gather => PathGoal::Rect {
                 pos: goal_pos.as_vec2i(),
                 size: Vec2i::new(1, 1),
-            }
-        } else {
-            PathGoal::Point {
-                pos: goal_pos.clone(),
-            }
+            },
+            MoveGoalType::Build(building) => PathGoal::Rect {
+                pos: building.borrow().get_position().clone(),
+                size: Vec2i::new(
+                    building.borrow().get_width(),
+                    building.borrow().get_height(),
+                ),
+            },
         };
 
         let found_path = self
@@ -813,8 +969,23 @@ impl Game {
 
             for entity in entities_commanded {
                 let entity_type = entity.borrow().get_entity_type();
-                if is_gather_command {
-                    match entity_type {
+
+                match &move_goal_type {
+                    MoveGoalType::Move => {
+                        entity.borrow_mut().set_action_move(
+                            found_path.clone(),
+                            &goal_pos,
+                            entity_mass,
+                        );
+                    }
+                    MoveGoalType::Attack => {
+                        entity.borrow_mut().set_action_attack(
+                            found_path.clone(),
+                            &goal_pos,
+                            entity_mass,
+                        );
+                    }
+                    MoveGoalType::Gather => match entity_type {
                         EntityType::Worker => {
                             entity.borrow_mut().set_action_gather(
                                 goal_pos.as_vec2i(),
@@ -823,18 +994,13 @@ impl Game {
                             );
                         }
                         _ => {}
+                    },
+                    MoveGoalType::Build(building) => {
+                        entity
+                            .borrow_mut()
+                            .set_action_build(building.clone(), Some(found_path.clone()));
                     }
-                } else if is_attack_command {
-                    entity.borrow_mut().set_action_attack(
-                        found_path.clone(),
-                        &goal_pos,
-                        entity_mass,
-                    );
-                } else {
-                    entity
-                        .borrow_mut()
-                        .set_action_move(found_path.clone(), &goal_pos, entity_mass);
-                }
+                };
             }
         }
     }

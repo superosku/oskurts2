@@ -19,7 +19,6 @@ pub enum EntityType {
 
 #[derive(Clone)]
 pub struct Goal {
-    // position: Vec2f,
     group_size: f32,
     path: Rc<RefCell<Path>>,
 }
@@ -30,20 +29,11 @@ impl Debug for Goal {
     }
 }
 
-// #[derive(Clone)]
-// pub struct GatherGoalBuilding {
-//     building_position: Vec2i,
-//     building_size: Vec2i,
-// }
-//
-// impl GatherGoalBuilding {
-//     pub fn new(building_position: Vec2i, building_size: Vec2i) -> GatherGoalBuilding {
-//         GatherGoalBuilding {
-//             building_position,
-//             building_size,
-//         }
-//     }
-// }
+impl Debug for BuildGoal {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "BuildGoal")
+    }
+}
 
 #[derive(Clone)]
 pub struct GatherGoal {
@@ -53,6 +43,13 @@ pub struct GatherGoal {
     going_towards_resource: bool,
     counter: i32,
     path: Option<Rc<RefCell<Path>>>,
+}
+
+#[derive(Clone)]
+pub struct BuildGoal {
+    building: Rc<RefCell<Building>>, // TODO: Should we store reference to the building here or rather something else?
+    path: Option<Rc<RefCell<Path>>>,
+    counter: i32,
 }
 
 impl Debug for GatherGoal {
@@ -68,6 +65,7 @@ pub enum EntityAction {
     Idle,
     Gather(GatherGoal),
     Hold,
+    Build(BuildGoal),
 }
 
 impl EntityAction {
@@ -121,6 +119,13 @@ impl Entity {
         entity.entity_type = entity_type;
 
         entity
+    }
+
+    pub fn is_worker(&self) -> bool {
+        match self.entity_type {
+            EntityType::Worker => true,
+            _ => false,
+        }
     }
 
     pub fn get_entity_type(&self) -> EntityType {
@@ -183,6 +188,18 @@ impl Entity {
     fn set_action(&mut self, action: EntityAction) {
         println!("set_action {:?}", action);
         self.action = action;
+    }
+
+    pub fn set_action_build(
+        &mut self,
+        building: Rc<RefCell<Building>>,
+        path: Option<Rc<RefCell<Path>>>,
+    ) {
+        self.set_action(EntityAction::Build(BuildGoal {
+            building,
+            path,
+            counter: 0,
+        }));
     }
 
     pub fn set_action_hold(&mut self) {
@@ -633,6 +650,40 @@ impl Entity {
         }
     }
 
+    pub fn handle_build(
+        &mut self,
+        goal: &mut BuildGoal,
+        step_n: i32,
+        step_delta: f32,
+        event_handler: &mut EventHandler,
+    ) {
+        if let Some(path_ref) = &goal.path {
+            let path = path_ref.borrow();
+            if path.distance_to_goal(&self.position) < self.radius + 0.1 {
+                if step_n == 0 {
+                    goal.counter += 1;
+                    if goal.counter > 30 {
+                        // Building build counter is incremented 2x per sec
+                        goal.counter = 0;
+                        goal.building
+                            .borrow_mut()
+                            .construction_progress
+                            .increment(1);
+                        if goal.building.borrow().is_constructed() {
+                            self.action = EntityAction::Idle;
+                        }
+                    }
+                }
+            } else {
+                if let Some(path) = &goal.path {
+                    self.move_towards_path(path.clone(), step_delta, event_handler);
+                } else {
+                    println!("No path found 2");
+                }
+            }
+        }
+    }
+
     pub fn handle_gather(
         &mut self,
         goal: &mut GatherGoal,
@@ -793,6 +844,9 @@ impl Entity {
             }
             EntityAction::Gather(goal) => {
                 self.handle_gather(goal, step_n, step_delta, event_handler);
+            }
+            EntityAction::Build(goal) => {
+                self.handle_build(goal, step_n, step_delta, event_handler);
             }
             EntityAction::Hold => {
                 if let Some(closest_enemy) = closest_enemy {

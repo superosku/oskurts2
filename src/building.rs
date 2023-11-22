@@ -13,10 +13,17 @@ pub struct Building {
     spawn_timer: i32,
     spawn_command_position: Option<Vec2f>,
     pub health: Health,
+    pub construction_progress: Health,
 }
 
 impl Building {
-    pub fn new(position: Vec2i, width: i32, height: i32, team: u8) -> Building {
+    pub fn new(
+        position: Vec2i,
+        width: i32,
+        height: i32,
+        team: u8,
+        is_constructed: bool,
+    ) -> Building {
         let random_id = rand::random::<usize>();
 
         let mut spawn_queue = Vec::new();
@@ -31,7 +38,16 @@ impl Building {
             spawn_timer: 0,
             spawn_command_position: None,
             health: Health::new(1000),
+            construction_progress: if is_constructed {
+                Health::new(100)
+            } else {
+                Health::new_with_health(0, 100)
+            },
         }
+    }
+
+    pub fn is_constructed(&self) -> bool {
+        self.construction_progress.health_ratio() >= 1.0
     }
 
     pub fn get_spawn_duration(&self) -> i32 {

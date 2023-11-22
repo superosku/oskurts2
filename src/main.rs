@@ -229,6 +229,10 @@ fn main() {
                         }
                     }
 
+                    if input.key_pressed(KeyCode::KeyB) {
+                        game.command_construct_building(&selected_ids, &cursor_game_pos.as_vec2i());
+                    }
+
                     if input.key_held(KeyCode::KeyJ) {
                         game.ground.set_at(
                             cursor_game_pos.x as i32,

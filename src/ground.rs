@@ -3,7 +3,7 @@ use crate::vec::Vec2f;
 
 // Derive clone
 
-#[derive(Clone)]
+#[derive(Clone, PartialEq)]
 pub enum GroundType {
     Empty,
     Wall,

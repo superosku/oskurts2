@@ -17,14 +17,20 @@ impl BuildingContainer {
         }
     }
 
-    pub fn add_building(&mut self, building: Building, ground: &mut Ground) {
+    pub fn add_building(
+        &mut self,
+        building: Building,
+        ground: &mut Ground,
+    ) -> Rc<RefCell<Building>> {
         for x in building.get_position().x..building.get_position().x + building.get_width() {
             for y in building.get_position().y..building.get_position().y + building.get_height() {
                 ground.set_at(x, y, GroundType::Wall);
             }
         }
         // TODO: Set ground tiles to occupied
-        self.buildings.push(Rc::new(RefCell::new(building)));
+        let building_ref = Rc::new(RefCell::new(building));
+        self.buildings.push(building_ref.clone());
+        building_ref
     }
 
     // TODO: Remove building (set ground tiles to unoccupied)
