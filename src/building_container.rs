@@ -2,7 +2,7 @@ use crate::building::Building;
 use crate::entity::EntityType;
 use crate::event_handler::EventHandler;
 use crate::ground::{Ground, GroundType};
-use crate::vec::Vec2i;
+use crate::vec::{Vec2f, Vec2i};
 
 pub struct BuildingContainer {
     buildings: Vec<Building>,
@@ -53,6 +53,19 @@ impl BuildingContainer {
             }
         }
         None
+    }
+
+    pub fn set_spawn_command_position(&mut self, building_id: usize, pos: &Vec2f) {
+        for building in self.buildings.iter_mut() {
+            if building.get_id() == building_id {
+                building.set_spawn_command_position(pos.clone());
+                return;
+            }
+        }
+        println!(
+            "set_spawn_command_position no building found with id {}",
+            building_id
+        );
     }
 
     pub fn get_closest_building(&self, position: &Vec2i, team: u8) -> Option<&Building> {

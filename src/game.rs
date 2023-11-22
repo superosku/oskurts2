@@ -780,6 +780,11 @@ impl Game {
         }
     }
 
+    pub fn set_spawn_command_position(&mut self, building_id: usize, pos: &Vec2f) {
+        self.building_container
+            .set_spawn_command_position(building_id, pos);
+    }
+
     pub fn command_entities_move(
         &mut self,
         entity_ids: &Vec<usize>,
@@ -1032,16 +1037,27 @@ impl Game {
                 }
                 Event::SpawnEntity {
                     entity_type,
-                    position,
+                    building_id,
                     team,
                 } => {
-                    self.entity_container.spawn_entity(Entity::new_params(
-                        position,
-                        team,
-                        entity_type,
-                    ));
-
-                    println!("Spwaning an entity");
+                    if let Some(building) = self.building_container.get_building_by_id(building_id)
+                    {
+                        println!("Spwaning an entity");
+                        let new_entity =
+                            Entity::new_params(building.get_spawn_position(), team, entity_type);
+                        let new_entity_id = new_entity.get_id();
+                        self.entity_container.spawn_entity(new_entity);
+                        if let Some(building_command_pos) = building.get_spawn_command_position() {
+                            println!("Spawning entity: Commanding to move to position");
+                            self.command_entities_move(
+                                &vec![new_entity_id],
+                                &building_command_pos,
+                                false,
+                            );
+                        };
+                    } else {
+                        println!("Building that does not exists is spawning an entity");
+                    }
                 }
                 Event::RequestRePath { entity_id } => {
                     let entity_ref = self.entity_container.get_by_id(entity_id);

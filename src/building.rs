@@ -10,6 +10,7 @@ pub struct Building {
     team: u8,
     spawn_queue: Vec<EntityType>,
     spawn_timer: i32,
+    spawn_command_position: Option<Vec2f>,
 }
 
 impl Building {
@@ -17,10 +18,6 @@ impl Building {
         let random_id = rand::random::<usize>();
 
         let mut spawn_queue = Vec::new();
-        // spawn_queue.push(EntityType::Worker);
-        // spawn_queue.push(EntityType::Worker);
-        // spawn_queue.push(EntityType::Melee);
-        // spawn_queue.push(EntityType::Ranged);
 
         Building {
             position,
@@ -30,6 +27,7 @@ impl Building {
             team,
             spawn_queue,
             spawn_timer: 0,
+            spawn_command_position: None,
         }
     }
 
@@ -70,6 +68,14 @@ impl Building {
         Vec2f::new(self.position.x as f32 - 0.5, self.position.y as f32 - 0.5)
     }
 
+    pub fn get_spawn_command_position(&self) -> Option<Vec2f> {
+        self.spawn_command_position.clone()
+    }
+
+    pub fn set_spawn_command_position(&mut self, position: Vec2f) {
+        self.spawn_command_position = Some(position);
+    }
+
     pub fn get_position(&self) -> Vec2i {
         self.position.clone()
     }
@@ -93,7 +99,7 @@ impl Building {
 
                 event_handler.add_event(Event::SpawnEntity {
                     entity_type,
-                    position: self.get_spawn_position(),
+                    building_id: self.id,
                     team: self.team,
                 })
                 // TODO: Spawn an entity here

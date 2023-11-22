@@ -243,11 +243,15 @@ fn main() {
                     }
 
                     if input.mouse_pressed(1) || input.key_pressed(KeyCode::KeyR) {
-                        game.command_entities_move(
-                            &selected_ids,
-                            &cursor_game_pos,
-                            input.key_held(KeyCode::KeyE),
-                        );
+                        if let Some(building_id) = selected_building_id {
+                            game.set_spawn_command_position(building_id, &cursor_game_pos);
+                        } else {
+                            game.command_entities_move(
+                                &selected_ids,
+                                &cursor_game_pos,
+                                input.key_held(KeyCode::KeyE),
+                            );
+                        }
                     }
                     if input.mouse_pressed(0) {
                         drag_start_pos = Some(cursor_game_pos.clone());
@@ -294,19 +298,21 @@ fn main() {
                     println!("LAG: {:?}", lag);
                 }
 
-                if update_timer + ups_dur <= now {
-                    update_timer += ups_dur;
+                for _ in 0..2 {
+                    if update_timer + ups_dur <= now {
+                        update_timer += ups_dur;
 
-                    let game_update_start = Instant::now();
-                    game.update();
-                    game_update_time = Instant::now() - game_update_start;
+                        let game_update_start = Instant::now();
+                        game.update();
+                        game_update_time = Instant::now() - game_update_start;
 
-                    let mut update_time = now - last_update_time;
-                    last_update_time = now;
-                    let current_ups = 1.0 / update_time.as_secs_f32();
-                    last_seconds_upses.push(current_ups);
-                    if last_seconds_upses.len() > 60 {
-                        last_seconds_upses.remove(0);
+                        let mut update_time = now - last_update_time;
+                        last_update_time = now;
+                        let current_ups = 1.0 / update_time.as_secs_f32();
+                        last_seconds_upses.push(current_ups);
+                        if last_seconds_upses.len() > 60 {
+                            last_seconds_upses.remove(0);
+                        }
                     }
                 }
             }

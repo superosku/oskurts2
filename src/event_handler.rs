@@ -23,8 +23,8 @@ pub enum Event {
     },
     SpawnEntity {
         entity_type: EntityType,
-        position: Vec2f,
         team: u8,
+        building_id: usize,
     },
     RequestRePath {
         entity_id: usize,
