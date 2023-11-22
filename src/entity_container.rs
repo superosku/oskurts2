@@ -44,7 +44,7 @@ impl EntityContainer {
     pub fn remove_dead(&mut self) {
         self.entities_rc.retain(|entity_rc| {
             let entity = entity_rc.borrow();
-            entity.is_alive()
+            entity.health.is_alive()
         });
     }
 

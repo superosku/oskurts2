@@ -1,5 +1,6 @@
 use crate::entity::EntityType;
 use crate::event_handler::{Event, EventHandler};
+use crate::health::Health;
 use crate::vec::{Vec2f, Vec2i};
 
 pub struct Building {
@@ -11,6 +12,7 @@ pub struct Building {
     spawn_queue: Vec<EntityType>,
     spawn_timer: i32,
     spawn_command_position: Option<Vec2f>,
+    pub health: Health,
 }
 
 impl Building {
@@ -28,6 +30,7 @@ impl Building {
             spawn_queue,
             spawn_timer: 0,
             spawn_command_position: None,
+            health: Health::new(1000),
         }
     }
 
@@ -50,6 +53,13 @@ impl Building {
 
     pub fn get_spawn_queue(&self) -> &Vec<EntityType> {
         &self.spawn_queue
+    }
+
+    pub fn get_center_position(&self) -> Vec2f {
+        Vec2f::new(
+            self.position.x as f32 + self.width as f32 / 2.0,
+            self.position.y as f32 + self.height as f32 / 2.0,
+        )
     }
 
     pub fn get_spawn_timer(&self) -> i32 {
@@ -102,7 +112,6 @@ impl Building {
                     building_id: self.id,
                     team: self.team,
                 })
-                // TODO: Spawn an entity here
             }
         }
     }

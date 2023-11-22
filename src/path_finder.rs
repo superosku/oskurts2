@@ -18,7 +18,7 @@ pub struct Path {
     pub goal: PathGoal,
 }
 
-fn distance_to_big_block(entity_pos: &Vec2f, pos: &Vec2i, size: &Vec2i) -> f32 {
+pub fn distance_to_big_block(entity_pos: &Vec2f, pos: &Vec2i, size: &Vec2i) -> f32 {
     let y_diff = if entity_pos.y < pos.y as f32 {
         pos.y as f32 - entity_pos.y
     } else if entity_pos.y > (pos.y + size.y) as f32 {

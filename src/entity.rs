@@ -1,6 +1,8 @@
+use crate::building::Building;
 use crate::event_handler::{Event, EventHandler};
 use crate::ground::Ground;
-use crate::path_finder::{Path, PathFinder, PathGoal};
+use crate::health::Health;
+use crate::path_finder::{distance_to_big_block, Path, PathFinder, PathGoal};
 use crate::resources::Resources;
 use crate::vec::{Vec2f, Vec2i};
 use std::cell::RefCell;
@@ -94,9 +96,8 @@ pub struct Entity {
     radius: f32,
     team: u8,
     projectile_cooldown: i32,
-    health: i32,
-    max_health: i32,
     entity_type: EntityType,
+    pub health: Health,
 }
 
 impl Clone for Entity {
@@ -120,10 +121,6 @@ impl Entity {
         entity.entity_type = entity_type;
 
         entity
-    }
-
-    pub fn health_ratio(&self) -> f32 {
-        self.health as f32 / self.max_health as f32
     }
 
     pub fn get_entity_type(&self) -> EntityType {
@@ -166,18 +163,9 @@ impl Entity {
             radius: random_radius,
             team: random_team,
             projectile_cooldown: 0,
-            health: 100,
-            max_health: 100,
+            health: Health::new(100),
             entity_type: random_entity_type,
         }
-    }
-
-    pub fn is_alive(&self) -> bool {
-        self.health > 0
-    }
-
-    pub fn take_damage(&mut self, damage: i32) {
-        self.health -= damage;
     }
 
     pub fn get_team(&self) -> u8 {
@@ -526,11 +514,94 @@ impl Entity {
         self.move_towards_goal(&asdf_goal, step_delta);
     }
 
+    fn potentially_launch_projectile(
+        &mut self,
+        event_handler: &mut EventHandler,
+        goal_position: &Vec2f,
+    ) {
+        if self.projectile_cooldown == 0 {
+            match self.entity_type {
+                EntityType::Ranged => {
+                    event_handler.add_event(Event::AddRangedProjectile {
+                        start: self.position.clone(),
+                        end: goal_position.clone(),
+                        team: self.team,
+                    });
+                }
+                EntityType::Melee => {
+                    event_handler.add_event(Event::AddMeleeProjectile {
+                        end: goal_position.clone(),
+                        team: self.team,
+                    });
+                }
+                EntityType::Worker => {}
+            }
+            self.projectile_cooldown = 100;
+        } else {
+            self.projectile_cooldown -= 1;
+        }
+    }
+
+    // Helper for fn update
+    fn interact_with_closest_enemy_building(
+        &mut self,
+        closest_enemy_building: &Rc<RefCell<Building>>,
+        step_n: i32,
+        step_delta: f32,
+        can_move: bool,
+        event_handler: &mut EventHandler,
+    ) {
+        let closest_enemy_building = closest_enemy_building.borrow();
+
+        let distance_to_building = distance_to_big_block(
+            &self.position,
+            &closest_enemy_building.get_position(),
+            &Vec2i::new(
+                closest_enemy_building.get_width(),
+                closest_enemy_building.get_height(),
+            ),
+        );
+
+        // let enemy_position = closest_enemy.borrow().position.clone();
+        // let delta = enemy_position.clone() - self.position.clone();
+        // let delta_length = delta.length();
+        // let combined_length = self.radius + closest_enemy.borrow().radius;
+
+        let min_range = match self.entity_type {
+            EntityType::Ranged => 5.0,
+            EntityType::Melee => self.radius + 0.1,
+            EntityType::Worker => {
+                // Workers do not interact with enemies
+                // TODO: Should it run away?
+                return;
+            }
+        };
+
+        if distance_to_building > min_range {
+            if can_move {
+                self.move_towards_goal(&closest_enemy_building.get_center_position(), step_delta);
+            }
+        } else {
+            if step_n == 0 {
+                let building_center_position = closest_enemy_building.get_center_position();
+                let distance_to_building_center =
+                    (self.position.clone() - building_center_position.clone()).length();
+
+                let projectile_goal_pos = if distance_to_building_center > min_range {
+                    // TODO: Here we should aim towards the closest corner of the building (or closest side?)
+                    building_center_position
+                } else {
+                    building_center_position
+                };
+                self.potentially_launch_projectile(event_handler, &projectile_goal_pos);
+            }
+        }
+    }
+
     // Helper for fn update
     fn interact_with_closest_enemy(
         &mut self,
         closest_enemy: &Rc<RefCell<Entity>>,
-        // projectile_handler: &mut ProjectileHandler,
         step_n: i32,
         step_delta: f32,
         can_move: bool,
@@ -557,27 +628,7 @@ impl Entity {
             }
         } else {
             if step_n == 0 {
-                if self.projectile_cooldown == 0 {
-                    match self.entity_type {
-                        EntityType::Ranged => {
-                            event_handler.add_event(Event::AddRangedProjectile {
-                                start: self.position.clone(),
-                                end: closest_enemy.borrow().position.clone(),
-                                team: self.team,
-                            });
-                        }
-                        EntityType::Melee => {
-                            event_handler.add_event(Event::AddMeleeProjectile {
-                                end: closest_enemy.borrow().position.clone(),
-                                team: self.team,
-                            });
-                        }
-                        EntityType::Worker => {}
-                    }
-                    self.projectile_cooldown = 100;
-                } else {
-                    self.projectile_cooldown -= 1;
-                }
+                self.potentially_launch_projectile(event_handler, &closest_enemy.borrow().position);
             }
         }
     }
@@ -664,6 +715,7 @@ impl Entity {
     pub fn update(
         &mut self,
         closest_enemy: Option<Rc<RefCell<Entity>>>,
+        closest_enemy_building: Option<Rc<RefCell<Building>>>,
         step_n: i32,
         step_delta: f32,
         event_handler: &mut EventHandler,
@@ -676,6 +728,14 @@ impl Entity {
                 if let Some(closest_enemy) = closest_enemy {
                     self.interact_with_closest_enemy(
                         &closest_enemy,
+                        step_n,
+                        step_delta,
+                        true,
+                        event_handler,
+                    );
+                } else if let Some(closest_enemy_building) = closest_enemy_building {
+                    self.interact_with_closest_enemy_building(
+                        &closest_enemy_building,
                         step_n,
                         step_delta,
                         true,
@@ -717,6 +777,14 @@ impl Entity {
                             true,
                             event_handler,
                         );
+                    } else if let Some(closest_enemy_building) = closest_enemy_building {
+                        self.interact_with_closest_enemy_building(
+                            &closest_enemy_building,
+                            step_n,
+                            step_delta,
+                            true,
+                            event_handler,
+                        );
                     } else {
                         // self.move_towards_path(goal.path.clone(), &goal.position, step_delta);
                         self.move_towards_path(goal.path.clone(), step_delta, event_handler);
@@ -730,6 +798,14 @@ impl Entity {
                 if let Some(closest_enemy) = closest_enemy {
                     self.interact_with_closest_enemy(
                         &closest_enemy,
+                        step_n,
+                        step_delta,
+                        false,
+                        event_handler,
+                    );
+                } else if let Some(closest_enemy_building) = closest_enemy_building {
+                    self.interact_with_closest_enemy_building(
+                        &closest_enemy_building,
                         step_n,
                         step_delta,
                         false,
