@@ -309,7 +309,8 @@ impl Path {
 
             if let Some(new_direction) = new_direction {
                 if new_direction.x.is_nan() || new_direction.y.is_nan() {
-                    println!("Why does this happen??");
+                    // TODO: Figure out this nan thing
+                    // println!("Why does this happen??");
                     new_position_datas.insert(*path_item, direction.clone());
                 } else {
                     new_position_datas.insert(*path_item, new_direction);

@@ -8,7 +8,7 @@ pub struct Team {
 impl Team {
     pub fn new(team_id: u8) -> Team {
         Team {
-            resources: Resources::new(200),
+            resources: Resources::new(1000),
             team_id,
         }
     }

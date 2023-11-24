@@ -4,6 +4,7 @@ use crate::ground::Ground;
 use crate::health::Health;
 use crate::path_finder::{distance_to_big_block, Path, PathFinder, PathGoal};
 use crate::resources::Resources;
+use crate::spacial_partition::SpaciallyPartitionable;
 use crate::vec::{Vec2f, Vec2i};
 use std::cell::RefCell;
 use std::collections::HashSet;
@@ -104,6 +105,53 @@ impl Clone for Entity {
     }
 }
 
+pub struct EntityFilter {
+    pub team: Option<u8>,
+    pub not_team: Option<u8>,
+}
+
+impl EntityFilter {
+    pub fn empty() -> EntityFilter {
+        EntityFilter {
+            team: None,
+            not_team: None,
+        }
+    }
+
+    pub fn team(team: u8) -> EntityFilter {
+        EntityFilter {
+            team: Some(team),
+            not_team: None,
+        }
+    }
+
+    pub fn not_team(not_team: u8) -> EntityFilter {
+        EntityFilter {
+            team: None,
+            not_team: Some(not_team),
+        }
+    }
+}
+
+impl SpaciallyPartitionable<EntityFilter> for Entity {
+    fn get_position(&self) -> Vec2f {
+        self.position.clone()
+    }
+    fn matches_filter(&self, filter: &EntityFilter) -> bool {
+        if let Some(team) = filter.team {
+            if self.team != team {
+                return false;
+            }
+        }
+        if let Some(not_team) = filter.not_team {
+            if self.team == not_team {
+                return false;
+            }
+        }
+        return true;
+    }
+}
+
 impl Entity {
     pub fn new_params(position: Vec2f, team: u8, entity_type: EntityType) -> Entity {
         let mut entity = Entity::new(position);
@@ -186,7 +234,7 @@ impl Entity {
     }
 
     fn set_action(&mut self, action: EntityAction) {
-        println!("set_action {:?}", action);
+        // println!("set_action {:?}", action);
         self.action = action;
     }
 

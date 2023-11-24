@@ -34,6 +34,7 @@ mod path_finder;
 mod projectile;
 mod projectile_handler;
 mod resources;
+mod spacial_partition;
 mod team;
 mod vec;
 

@@ -3,7 +3,7 @@ use crate::building_container::BuildingContainer;
 use crate::camera::Camera;
 use crate::constants::{ENTITY_AMOUNT, GROUND_HEIGHT, GROUND_WIDTH, SCREEN_HEIGHT, SCREEN_WIDTH};
 use crate::draw::draw_health_bar;
-use crate::entity::{BuildGoal, Entity, EntityAction, EntityType};
+use crate::entity::{Entity, EntityFilter, EntityType};
 use crate::entity_container::EntityContainer;
 use crate::event_handler::{Event, EventHandler};
 use crate::ground::{Ground, GroundType};
@@ -263,10 +263,9 @@ impl Game {
         let (min_x, max_x, min_y, max_y) = self.get_draw_boundaries(camera);
 
         for entity_ref in self.entity_container.entities_in_box(
-            &Vec2f::new(min_x as f32, min_y as f32),
-            &Vec2f::new(max_x as f32, max_y as f32),
-            None,
-            None,
+            Vec2f::new(min_x as f32, min_y as f32),
+            Vec2f::new(max_x as f32, max_y as f32),
+            EntityFilter::empty(),
         ) {
             let entity = entity_ref.borrow();
             let entity_position = entity.get_position();
@@ -1019,16 +1018,15 @@ impl Game {
             let entity1_position = entity1.borrow().get_position();
 
             let closest_enemy = self.entity_container.get_closest_entity(
-                &entity1.borrow().get_position(),
+                entity1.borrow().get_position().clone(),
                 8.0,
-                None,
-                Some(entity1.borrow().get_team()),
+                EntityFilter::not_team(entity1.borrow().get_team()),
             );
 
             let mut close_entities: Vec<Rc<RefCell<Entity>>> = Vec::new();
             for entity in self
                 .entity_container
-                .entities_in_radius(&entity1_position, 2.0, None, None)
+                .entities_in_radius(entity1_position.clone(), 2.0, EntityFilter::empty())
                 .iter()
             {
                 if entity.borrow().get_id() == entity1.borrow().get_id() {
@@ -1239,10 +1237,9 @@ impl Game {
         self.projectile_handler.progress_projectiles();
         for projectile in self.projectile_handler.get_impacting_projectiles() {
             if let Some(entity_hit) = self.entity_container.get_closest_entity(
-                &projectile.get_position(),
+                projectile.get_position().clone(),
                 1.0, // TODO: Is this right??
-                None,
-                Some(projectile.get_team()),
+                EntityFilter::not_team(projectile.get_team()),
             ) {
                 entity_hit
                     .borrow_mut()
