@@ -152,16 +152,16 @@ impl Game {
             ));
             path_builder.move_to(draw_pos.x, draw_pos.y);
             path_builder.line_to(
-                draw_pos.x + camera.length_to_pixels(width as f32 - 0.2),
+                draw_pos.x + camera.length_to_pixels_x(width as f32 - 0.2),
                 draw_pos.y,
             );
             path_builder.line_to(
-                draw_pos.x + camera.length_to_pixels(width as f32 - 0.2),
-                draw_pos.y + camera.length_to_pixels(height as f32 - 0.2),
+                draw_pos.x + camera.length_to_pixels_x(width as f32 - 0.2),
+                draw_pos.y + camera.length_to_pixels_y(height as f32 - 0.2),
             );
             path_builder.line_to(
                 draw_pos.x,
-                draw_pos.y + camera.length_to_pixels(height as f32 - 0.2),
+                draw_pos.y + camera.length_to_pixels_y(height as f32 - 0.2),
             );
             path_builder.close();
 
@@ -197,16 +197,16 @@ impl Game {
                         camera.world_to_screen(&Vec2f::new(position.x as f32, position.y as f32));
                     selection_path_builder.move_to(selection_draw_pos.x, selection_draw_pos.y);
                     selection_path_builder.line_to(
-                        selection_draw_pos.x + camera.length_to_pixels(width as f32),
+                        selection_draw_pos.x + camera.length_to_pixels_x(width as f32),
                         selection_draw_pos.y,
                     );
                     selection_path_builder.line_to(
-                        selection_draw_pos.x + camera.length_to_pixels(width as f32),
-                        selection_draw_pos.y + camera.length_to_pixels(height as f32),
+                        selection_draw_pos.x + camera.length_to_pixels_x(width as f32),
+                        selection_draw_pos.y + camera.length_to_pixels_y(height as f32),
                     );
                     selection_path_builder.line_to(
                         selection_draw_pos.x,
-                        selection_draw_pos.y + camera.length_to_pixels(height as f32),
+                        selection_draw_pos.y + camera.length_to_pixels_y(height as f32),
                     );
                     selection_path_builder.close();
 
@@ -276,46 +276,89 @@ impl Game {
             let path_builder = &mut path_builders[entity.get_team() as usize];
             let radius = entity.get_radius() - 0.0;
 
-            path_builder.move_to(draw_pos.x, draw_pos.y);
-            path_builder.arc(
-                draw_pos.x,
-                draw_pos.y,
-                camera.length_to_pixels(radius),
-                0.0,
-                2.0 * std::f32::consts::PI,
-            );
+            // path_builder.move_to(draw_pos.x, draw_pos.y);
+            // path_builder.arc(
+            //     draw_pos.x,
+            //     draw_pos.y,
+            //     camera.length_to_pixels(radius),
+            //     0.0,
+            //     2.0 * std::f32::consts::PI,
+            // );
 
-            let delt = camera.length_to_pixels(radius) * 0.5;
+            // Draw an ellipsis
+            let delt_x = camera.length_to_pixels_x(radius);
+            let delt_y = camera.length_to_pixels_y(radius);
+            let cubic_rate = 0.55228; // https://stackoverflow.com/questions/1734745/how-to-create-circle-with-b%C3%A9zier-curves
+            path_builder.move_to(draw_pos.x, draw_pos.y - delt_y);
+            path_builder.cubic_to(
+                draw_pos.x + delt_x * cubic_rate,
+                draw_pos.y - delt_y,
+                draw_pos.x + delt_x,
+                draw_pos.y - delt_y * cubic_rate,
+                draw_pos.x + delt_x,
+                draw_pos.y,
+            );
+            path_builder.cubic_to(
+                draw_pos.x + delt_x,
+                draw_pos.y + delt_y * cubic_rate,
+                draw_pos.x + delt_x * cubic_rate,
+                draw_pos.y + delt_y,
+                draw_pos.x,
+                draw_pos.y + delt_y,
+            );
+            path_builder.cubic_to(
+                draw_pos.x - delt_x * cubic_rate,
+                draw_pos.y + delt_y,
+                draw_pos.x - delt_x,
+                draw_pos.y + delt_y * cubic_rate,
+                draw_pos.x - delt_x,
+                draw_pos.y,
+            );
+            path_builder.cubic_to(
+                draw_pos.x - delt_x,
+                draw_pos.y - delt_y * cubic_rate,
+                draw_pos.x - delt_x * cubic_rate,
+                draw_pos.y - delt_y,
+                draw_pos.x,
+                draw_pos.y - delt_y,
+            );
+            // path_builder.quad_to( draw_pos.x + delt_x, draw_pos.y + delt_y, draw_pos.x, draw_pos.y + delt_y, );
+
+            // path_builder.quad_to( draw_pos.x - delt_x, draw_pos.y, draw_pos.x, draw_pos.y - delt_y, );
+            path_builder.close();
+
+            let delt_x = camera.length_to_pixels_x(radius) * 0.5;
+            let delt_y = camera.length_to_pixels_y(radius) * 0.5;
 
             match entity.get_entity_type() {
                 EntityType::Ranged => {
-                    entity_type_path_builder.move_to(draw_pos.x, draw_pos.y - delt);
+                    entity_type_path_builder.move_to(draw_pos.x, draw_pos.y - delt_y);
                     entity_type_path_builder
-                        .line_to(draw_pos.x + delt * 0.81, draw_pos.y + delt * 0.58);
+                        .line_to(draw_pos.x + delt_x * 0.81, draw_pos.y + delt_y * 0.58);
                     entity_type_path_builder
-                        .line_to(draw_pos.x - delt * 0.81, draw_pos.y + delt * 0.58);
+                        .line_to(draw_pos.x - delt_x * 0.81, draw_pos.y + delt_y * 0.58);
                     entity_type_path_builder.close();
                 }
                 EntityType::Melee => {
                     entity_type_path_builder
-                        .move_to(draw_pos.x - delt * 0.707, draw_pos.y - delt * 0.707);
+                        .move_to(draw_pos.x - delt_x * 0.707, draw_pos.y - delt_y * 0.707);
                     entity_type_path_builder
-                        .line_to(draw_pos.x + delt * 0.707, draw_pos.y - delt * 0.707);
+                        .line_to(draw_pos.x + delt_x * 0.707, draw_pos.y - delt_y * 0.707);
                     entity_type_path_builder
-                        .line_to(draw_pos.x + delt * 0.707, draw_pos.y + delt * 0.707);
+                        .line_to(draw_pos.x + delt_x * 0.707, draw_pos.y + delt_y * 0.707);
                     entity_type_path_builder
-                        .line_to(draw_pos.x - delt * 0.707, draw_pos.y + delt * 0.707);
+                        .line_to(draw_pos.x - delt_x * 0.707, draw_pos.y + delt_y * 0.707);
                     entity_type_path_builder.close();
                 }
                 EntityType::Worker => {
                     entity_type_path_builder
-                        .move_to(draw_pos.x - delt * 0.707, draw_pos.y - delt * 0.2);
+                        .move_to(draw_pos.x - delt_x * 0.707, draw_pos.y - delt_y * 0.2);
                     entity_type_path_builder
-                        .line_to(draw_pos.x + delt * 0.707, draw_pos.y - delt * 0.2);
+                        .line_to(draw_pos.x + delt_x * 0.707, draw_pos.y - delt_y * 0.2);
                     entity_type_path_builder
-                        .line_to(draw_pos.x + delt * 0.707, draw_pos.y + delt * 0.2);
+                        .line_to(draw_pos.x + delt_x * 0.707, draw_pos.y + delt_y * 0.2);
                     entity_type_path_builder
-                        .line_to(draw_pos.x - delt * 0.707, draw_pos.y + delt * 0.2);
+                        .line_to(draw_pos.x - delt_x * 0.707, draw_pos.y + delt_y * 0.2);
                     entity_type_path_builder.close();
                 }
             }
@@ -336,8 +379,8 @@ impl Game {
                 selection_path_builder.rect(
                     top_right_corner.x,
                     top_right_corner.y,
-                    camera.length_to_pixels(radius * 2.0),
-                    camera.length_to_pixels(radius * 2.0),
+                    camera.length_to_pixels_x(radius * 2.0),
+                    camera.length_to_pixels_y(radius * 2.0),
                 );
             }
         }
@@ -443,26 +486,26 @@ impl Game {
                         let draw_pos = camera.world_to_screen(&Vec2f::new(x as f32, y as f32));
                         ground_path_builder.move_to(draw_pos.x, draw_pos.y);
                         ground_path_builder
-                            .line_to(draw_pos.x + camera.length_to_pixels(1.0), draw_pos.y);
+                            .line_to(draw_pos.x + camera.length_to_pixels_x(1.0), draw_pos.y);
                         ground_path_builder.line_to(
-                            draw_pos.x + camera.length_to_pixels(1.0),
-                            draw_pos.y + camera.length_to_pixels(1.0),
+                            draw_pos.x + camera.length_to_pixels_x(1.0),
+                            draw_pos.y + camera.length_to_pixels_y(1.0),
                         );
                         ground_path_builder
-                            .line_to(draw_pos.x, draw_pos.y + camera.length_to_pixels(1.0));
+                            .line_to(draw_pos.x, draw_pos.y + camera.length_to_pixels_y(1.0));
                         ground_path_builder.close();
                     }
                     GroundType::Wall => {
                         let draw_pos = camera.world_to_screen(&Vec2f::new(x as f32, y as f32));
                         wall_path_builder.move_to(draw_pos.x, draw_pos.y);
                         wall_path_builder
-                            .line_to(draw_pos.x + camera.length_to_pixels(1.0), draw_pos.y);
+                            .line_to(draw_pos.x + camera.length_to_pixels_x(1.0), draw_pos.y);
                         wall_path_builder.line_to(
-                            draw_pos.x + camera.length_to_pixels(1.0),
-                            draw_pos.y + camera.length_to_pixels(1.0),
+                            draw_pos.x + camera.length_to_pixels_x(1.0),
+                            draw_pos.y + camera.length_to_pixels_y(1.0),
                         );
                         wall_path_builder
-                            .line_to(draw_pos.x, draw_pos.y + camera.length_to_pixels(1.0));
+                            .line_to(draw_pos.x, draw_pos.y + camera.length_to_pixels_y(1.0));
                         wall_path_builder.close();
                     }
                 }
@@ -482,12 +525,12 @@ impl Game {
                                 camera.world_to_screen(&Vec2f::new(x as f32 + xx, y as f32 + yy));
                             gold_path_builder.move_to(draw_pos.x, draw_pos.y);
                             gold_path_builder.line_to(
-                                draw_pos.x + camera.length_to_pixels(0.15),
-                                draw_pos.y + camera.length_to_pixels(0.3),
+                                draw_pos.x + camera.length_to_pixels_x(0.15),
+                                draw_pos.y + camera.length_to_pixels_y(0.3),
                             );
                             gold_path_builder.line_to(
-                                draw_pos.x - camera.length_to_pixels(0.15),
-                                draw_pos.y + camera.length_to_pixels(0.3),
+                                draw_pos.x - camera.length_to_pixels_x(0.15),
+                                draw_pos.y + camera.length_to_pixels_y(0.3),
                             );
                             // gold_path_builder.line_to(draw_pos.x, draw_pos.y + camera.length_to_pixels(1.0));
                             gold_path_builder.close();
@@ -536,34 +579,34 @@ impl Game {
                         ));
 
                         path_builder.move_to(
-                            center_pos.x - camera.length_to_pixels(direction.x * 0.2),
-                            center_pos.y - camera.length_to_pixels(direction.y * 0.2),
+                            center_pos.x - camera.length_to_pixels_x(direction.x * 0.2),
+                            center_pos.y - camera.length_to_pixels_y(direction.y * 0.2),
                         );
                         path_builder.line_to(
-                            center_pos.x + camera.length_to_pixels(direction.x * 0.2),
-                            center_pos.y + camera.length_to_pixels(direction.y * 0.2),
+                            center_pos.x + camera.length_to_pixels_x(direction.x * 0.2),
+                            center_pos.y + camera.length_to_pixels_y(direction.y * 0.2),
                         );
                         path_builder.line_to(
                             center_pos.x
-                                + camera.length_to_pixels(
+                                + camera.length_to_pixels_x(
                                     direction.x * 0.2 + direction.y * 0.1 - direction.x * 0.1,
                                 ),
                             center_pos.y
-                                + camera.length_to_pixels(
+                                + camera.length_to_pixels_y(
                                     direction.y * 0.2 - direction.x * 0.1 - direction.y * 0.1,
                                 ),
                         );
                         path_builder.move_to(
-                            center_pos.x + camera.length_to_pixels(direction.x * 0.2),
-                            center_pos.y + camera.length_to_pixels(direction.y * 0.2),
+                            center_pos.x + camera.length_to_pixels_x(direction.x * 0.2),
+                            center_pos.y + camera.length_to_pixels_y(direction.y * 0.2),
                         );
                         path_builder.line_to(
                             center_pos.x
-                                + camera.length_to_pixels(
+                                + camera.length_to_pixels_x(
                                     direction.x * 0.2 - direction.y * 0.1 - direction.x * 0.1,
                                 ),
                             center_pos.y
-                                + camera.length_to_pixels(
+                                + camera.length_to_pixels_y(
                                     direction.y * 0.2 + direction.x * 0.1 - direction.y * 0.1,
                                 ),
                         );
